@@ -3,6 +3,7 @@ set -e
 
 echo "========================================"
 echo "  F2X Station Service - Update and Run"
+echo "  Port: 8080"
 echo "========================================"
 
 cd "$(dirname "$0")"
@@ -19,4 +20,5 @@ pip install -e . --quiet
 echo ""
 echo "[3/3] Starting Station Service..."
 echo "Press Ctrl+C to stop"
+export STATION_CONFIG=./config/station.yaml
 python -m station_service.main

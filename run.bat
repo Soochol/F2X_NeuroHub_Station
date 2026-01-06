@@ -2,6 +2,7 @@
 chcp 65001 >nul
 echo ========================================
 echo   F2X Station Service - Update and Run
+echo   Port: 8080
 echo ========================================
 
 cd /d "%~dp0"
@@ -28,5 +29,6 @@ if errorlevel 1 (
 echo.
 echo [3/3] Starting Station Service...
 echo Press Ctrl+C to stop
+set STATION_CONFIG=./config/station.yaml
 python -m station_service.main
 pause
