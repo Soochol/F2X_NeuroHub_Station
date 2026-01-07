@@ -119,13 +119,23 @@ class AXLWrapper:
         """Load the AXL DLL."""
         dll_path = Path(DLL_PATH)
 
-        if not dll_path.exists():
-            raise FileNotFoundError(f"AXL DLL not found at {DLL_PATH}")
+        # Try explicit path first
+        if dll_path.exists():
+            try:
+                self.dll = WinDLL(str(dll_path))
+                return
+            except OSError as e:
+                # If explicit path fails (e.g. bad architecture), try system path
+                pass
 
+        # Try loading from system PATH
         try:
-            self.dll = WinDLL(str(DLL_PATH))
+            self.dll = WinDLL("AXL.dll")
         except OSError as e:
-            raise RuntimeError(f"Failed to load AXL DLL: {e}") from e
+            raise FileNotFoundError(
+                f"AXL DLL not found at {DLL_PATH} or in system PATH. "
+                "Please install Ajinextek driver or place AXL.dll in driver/ajinextek/lib/"
+            ) from e
 
     def _setup_functions(self) -> None:
         """Set up function signatures for ctypes."""
