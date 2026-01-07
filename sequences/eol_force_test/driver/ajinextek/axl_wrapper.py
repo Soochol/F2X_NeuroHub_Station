@@ -125,15 +125,21 @@ class AXLWrapper:
                 self.dll = WinDLL(str(dll_path))
                 return
             except OSError as e:
-                # If explicit path fails (e.g. bad architecture), try system path
-                pass
+                # If the file exists but fails to load, it's likely a dependency issue or arch mismatch
+                # Do not silence this error as it's critical info for debugging
+                raise RuntimeError(
+                    f"Found AXL DLL at {dll_path} but failed to load it. "
+                    f"Error: {e}. Possible causes: missing dependencies (VC++ Redist), "
+                    "architecture mismatch (32/64bit), or corrupted file."
+                ) from e
 
-        # Try loading from system PATH
+        # strict fallback removed because if we found the file we should have succeeded or failed noisily
+        # specific check for system path if local file was NOT found
         try:
             self.dll = WinDLL("AXL.dll")
         except OSError as e:
             raise FileNotFoundError(
-                f"AXL DLL not found at {DLL_PATH} or in system PATH. "
+                f"AXL DLL not found at {DLL_PATH} and not in system PATH. "
                 "Please install Ajinextek driver or place AXL.dll in driver/ajinextek/lib/"
             ) from e
 
