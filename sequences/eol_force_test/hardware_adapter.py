@@ -418,6 +418,7 @@ def create_standalone_hardware_adapter(
         },
         "digital_io": {
             "type": hardware_config.digital_io.model,
+            "module_no": hardware_config.digital_io.module_no,
         },
     }
 

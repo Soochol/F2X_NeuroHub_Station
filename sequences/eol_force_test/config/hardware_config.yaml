@@ -24,6 +24,7 @@ power:
 
 digital_io:
   model: mock          # mock | ajinextek
+  module_no: 0         # Change this if outputs are on a different module
   servo1_brake_release: 0
   tower_lamp_red: 4
   tower_lamp_yellow: 5

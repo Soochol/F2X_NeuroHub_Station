@@ -179,6 +179,7 @@ class PowerConfig:
 class DigitalIOConfig:
     """Digital I/O configuration."""
     model: str = "mock"
+    module_no: int = 0
     servo1_brake_release: int = 0
     tower_lamp_red: int = 4
     tower_lamp_yellow: int = 5
