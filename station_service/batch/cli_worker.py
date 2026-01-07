@@ -18,6 +18,7 @@ Usage:
 import asyncio
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -145,12 +146,17 @@ class CLISequenceWorker:
 
         # Start subprocess
         try:
+            # Prepare environment with forced UTF-8 encoding
+            env = os.environ.copy()
+            env["PYTHONIOENCODING"] = "utf-8"
+
             self._process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(self._sequences_dir.parent),
+                env=env,
             )
             self._running = True
 
@@ -281,7 +287,7 @@ class CLISequenceWorker:
                 if not line:
                     break
 
-                line_str = line.decode().strip()
+                line_str = line.decode(errors="replace").strip()
                 if not line_str:
                     continue
 
@@ -311,7 +317,7 @@ class CLISequenceWorker:
                 if not line:
                     break
 
-                line_str = line.decode().strip()
+                line_str = line.decode(errors="replace").strip()
                 if line_str:
                     logger.warning(f"Sequence stderr: {line_str}")
                     if self._on_log:
