@@ -52,6 +52,8 @@ class AjinextekDIO(DigitalIOService):
             actual_input_count = self._axl.get_input_count(self._module_no)
             actual_output_count = self._axl.get_output_count(self._module_no)
 
+            print(f"DEBUG: DIO Module {self._module_no} - Inputs: {actual_input_count}, Outputs: {actual_output_count}")
+
             if actual_input_count != self._input_count:
                 self._input_count = actual_input_count
 
