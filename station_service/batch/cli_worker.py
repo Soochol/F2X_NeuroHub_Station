@@ -162,7 +162,9 @@ class CLISequenceWorker:
             return self._execution_id
 
         except Exception as e:
-            logger.error(f"Failed to start CLI sequence: {e}")
+            logger.error(f"Failed to start CLI sequence: [{type(e).__name__}] {e}")
+            if isinstance(e, FileNotFoundError):
+                 logger.error(f"Executable not found: {self._python} or script path issue")
             self._running = False
             raise
 

@@ -155,8 +155,8 @@ class CommandsMixin:
             return IPCResponse.error(command.request_id, str(e))
 
         except Exception as e:
-            logger.exception(f"Command handling error: {e}")
-            return IPCResponse.error(command.request_id, str(e))
+            logger.exception(f"Command handling error: [{type(e).__name__}] {e}")
+            return IPCResponse.error(command.request_id, f"[{type(e).__name__}] {str(e)}")
 
     async def _cmd_start_sequence(
         self: CommandsMixinProtocol,
@@ -307,9 +307,9 @@ class CommandsMixin:
         try:
             await self._cli_worker.start(cli_config)
         except Exception as e:
-            logger.error(f"Failed to start CLI sequence: {e}")
+            logger.error(f"Failed to start CLI sequence: [{type(e).__name__}] {e}")
             self._state.cancel_execution()
-            raise CLIWorkerStartError(str(e), self.batch_id, self._state.sequence_name)
+            raise CLIWorkerStartError(f"[{type(e).__name__}] {str(e)}", self.batch_id, self._state.sequence_name)
 
         # Start task to wait for completion
         self._execution_task = asyncio.create_task(self.run_cli_sequence())
