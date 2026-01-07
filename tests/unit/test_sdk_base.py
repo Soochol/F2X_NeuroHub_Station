@@ -10,9 +10,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from station_service.sdk.base import SequenceBase, StepResult
-from station_service.sdk.context import ExecutionContext
-from station_service.sdk.exceptions import SetupError, SequenceError, AbortError
+from station_service_sdk import (
+    SequenceBase,
+    StepResult,
+    ExecutionContext,
+    SetupError,
+    SequenceError,
+    AbortError,
+)
 
 
 # ============================================================================

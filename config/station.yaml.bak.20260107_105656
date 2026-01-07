@@ -46,36 +46,13 @@ batches:
     port: /dev/ttyUSB0
     baudrate: 115200
     timeout: 5
-    vl53l0x_target_mm: 150
+    vl53l0x_target_mm: 500
     vl53l0x_tolerance_mm: 100
     mlx90640_target_celsius: 25
     mlx90640_tolerance_celsius: 10
     test_vl53l0x_enabled: true
     test_mlx90640_enabled: true
     stop_on_failure: true
-- id: batch-1767753007251-cz8lxji-0
-  name: eol_force_test
-  sequence_package: sequences/eol_force_test
-  auto_start: false
-  parameters:
-    stop_on_failure: true
-    voltage: 18
-    current: 20
-    temperature_list: 38.0,52.0,66.0
-    standby_temperature: 38
-    activation_temperature: 52
-    stroke_positions: '170000.0'
-    initial_position: 1000
-    operating_position: 170000
-    velocity: 100000
-    acceleration: 85000
-    repeat_count: 1
-    timeout_seconds: 60
-    force_limit_min: 0
-    force_limit_max: 100
-  config:
-    processId: 1
-    headerId: 1
 logging:
   level: INFO
   file: data/logs/station.log

@@ -237,11 +237,37 @@ class CLISequenceWorker:
         if self._output_task:
             await self._output_task
 
+        # Wait for stderr parser to finish
+        if self._stderr_task:
+            await self._stderr_task
+
         # Wait for process to exit
         return_code = await self._process.wait()
         self._running = False
 
         logger.info(f"CLI sequence completed: return_code={return_code}")
+
+        # Handle abnormal termination (no sequence_complete event received)
+        if return_code != 0 and self._final_result is None:
+            logger.error(f"Sequence subprocess failed with return code {return_code}")
+            self._final_result = {
+                "overall_pass": False,
+                "duration": 0,
+                "steps": self._step_results,
+                "measurements": self._measurements,
+                "error": f"Sequence subprocess exited with code {return_code}",
+                "execution_id": self._execution_id,
+            }
+
+            # Trigger sequence_complete callback for proper state update
+            if self._on_sequence_complete:
+                await self._safe_callback(
+                    self._on_sequence_complete,
+                    self._execution_id,
+                    False,  # overall_pass
+                    0,      # duration
+                    self._final_result,
+                )
 
         return self._final_result
 

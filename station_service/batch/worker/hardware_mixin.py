@@ -342,13 +342,35 @@ class HardwareMixin:
             try:
                 from station_service.utils.dependency_installer import (
                     install_sequence_dependencies,
+                    get_missing_packages,
                 )
+                import tomllib
 
+                # Read dependencies from pyproject.toml
+                with open(pyproject_path, "rb") as f:
+                    pyproject_data = tomllib.load(f)
+                deps = pyproject_data.get("project", {}).get("dependencies", [])
+
+                # Install missing dependencies
                 installed = install_sequence_dependencies(package_dir)
                 if installed:
                     logger.info(f"Installed dependencies: {installed}")
+
+                # Verify all dependencies are now installed
+                if deps:
+                    still_missing = get_missing_packages(deps)
+                    if still_missing:
+                        error_msg = f"Missing required dependencies: {still_missing}"
+                        logger.error(error_msg)
+                        self._state.dependency_error = error_msg
+                    else:
+                        logger.info("All sequence dependencies verified")
+                        self._state.dependency_error = None
+
             except Exception as e:
-                logger.warning(f"Failed to install dependencies: {e}")
+                error_msg = f"Failed to install dependencies: {e}"
+                logger.error(error_msg)
+                self._state.dependency_error = error_msg
 
         # Load manifest for metadata
         manifest_path = package_dir / "manifest.yaml"

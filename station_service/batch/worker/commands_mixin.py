@@ -178,6 +178,14 @@ class CommandsMixin:
                 self._state.execution.execution_id if self._state.execution else None,
             )
 
+        # Check for dependency errors before starting
+        if self._state.dependency_error:
+            logger.error(f"Cannot start sequence: {self._state.dependency_error}")
+            return IPCResponse.error(
+                command.request_id,
+                f"Dependency error: {self._state.dependency_error}",
+            )
+
         parameters = command.params.get("parameters", {})
 
         # Extract WIP context from parameters

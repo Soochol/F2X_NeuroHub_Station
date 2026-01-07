@@ -38,6 +38,9 @@ dev = [
     "mypy>=1.0.0",
 ]
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["station_service"]
 

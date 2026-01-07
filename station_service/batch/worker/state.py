@@ -202,6 +202,7 @@ class WorkerState:
     sequence_name: Optional[str] = None
     sequence_version: Optional[str] = None
     manifest: Optional[Dict[str, Any]] = None
+    dependency_error: Optional[str] = None  # Error if dependencies failed to install
 
     # Current execution (None when idle)
     execution: Optional[ExecutionState] = None

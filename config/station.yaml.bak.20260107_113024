@@ -73,9 +73,6 @@ batches:
     timeout_seconds: 60
     force_limit_min: 0
     force_limit_max: 100
-  config:
-    processId: 1
-    headerId: 1
 logging:
   level: INFO
   file: data/logs/station.log

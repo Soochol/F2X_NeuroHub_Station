@@ -53,7 +53,7 @@ batches:
     test_vl53l0x_enabled: true
     test_mlx90640_enabled: true
     stop_on_failure: true
-- id: batch-1767753007251-cz8lxji-0
+- id: batch-1767751054221-lm1hmiq-0
   name: eol_force_test
   sequence_package: sequences/eol_force_test
   auto_start: false
@@ -73,9 +73,6 @@ batches:
     timeout_seconds: 60
     force_limit_min: 0
     force_limit_max: 100
-  config:
-    processId: 1
-    headerId: 1
 logging:
   level: INFO
   file: data/logs/station.log
