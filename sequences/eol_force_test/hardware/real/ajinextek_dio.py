@@ -52,7 +52,25 @@ class AjinextekDIO(DigitalIOService):
             actual_input_count = self._axl.get_input_count(self._module_no)
             actual_output_count = self._axl.get_output_count(self._module_no)
 
-            print(f"DEBUG: DIO Module {self._module_no} - Inputs: {actual_input_count}, Outputs: {actual_output_count}")
+            print(f"DEBUG: Selected DIO Module {self._module_no} - Inputs: {actual_input_count}, Outputs: {actual_output_count}")
+
+            # Scan other modules for debugging purposes
+            try:
+                module_count = self._axl.get_dio_module_count()
+                print(f"DEBUG: Total DIO Modules detected: {module_count}")
+                for i in range(module_count):
+                    try:
+                        in_cnt = self._axl.get_input_count(i)
+                        out_cnt = self._axl.get_output_count(i)
+                        print(f"DEBUG: Module {i} - Inputs: {in_cnt}, Outputs: {out_cnt}")
+                        
+                        # Auto-suggest if we found a module with outputs and current selected has none
+                        if actual_output_count == 0 and out_cnt > 0:
+                            print(f"SUGGESTION: Try changing 'module_no' to {i} in configuration")
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"DEBUG: Failed to scan modules: {e}")
 
             if actual_input_count != self._input_count:
                 self._input_count = actual_input_count
