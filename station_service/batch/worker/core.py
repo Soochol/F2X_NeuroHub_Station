@@ -133,10 +133,10 @@ class BatchWorker(BackendMixin, ExecutionMixin, HardwareMixin, CommandsMixin):
 
         # Setup signal handlers (if supported by event loop)
         loop = asyncio.get_event_loop()
-        if hasattr(loop, "add_signal_handler"):
+        try:
             for sig in (signal.SIGTERM, signal.SIGINT):
                 loop.add_signal_handler(sig, self._handle_signal)
-        else:
+        except NotImplementedError:
             logger.debug("Signal handlers not supported by event loop (skipping)")
 
         try:
