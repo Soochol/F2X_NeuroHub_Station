@@ -25,6 +25,7 @@ server:
       - http://192.168.35.86:5173
       - http://192.168.35.86:5174
       - http://192.168.35.86:8080
+      - http://192.168.35.181:9090
 paths:
   sequences_dir: ./sequences
   data_dir: ./data
