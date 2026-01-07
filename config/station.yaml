@@ -10,6 +10,21 @@ workflow:
 server:
   host: 0.0.0.0
   port: 8080
+  cors:
+    allowed_origins:
+      - http://localhost:3000
+      - http://localhost:3001
+      - http://localhost:5173
+      - http://localhost:5174
+      - http://127.0.0.1:3000
+      - http://127.0.0.1:3001
+      - http://127.0.0.1:5173
+      - http://127.0.0.1:5174
+      - http://192.168.35.181:3000
+      - http://192.168.35.181:3001
+      - http://192.168.35.181:5173
+      - http://192.168.35.181:5174
+      - http://192.168.35.181:8080
 paths:
   sequences_dir: ./sequences
   data_dir: ./data

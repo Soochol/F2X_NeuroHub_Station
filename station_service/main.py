@@ -309,15 +309,27 @@ async def lifespan(app: FastAPI):
 
 def get_cors_origins() -> list[str]:
     """
-    Get CORS allowed origins from environment variable.
-
-    Returns:
-        List of allowed origins
+    Get CORS allowed origins.
+    Priority:
+    1. Environment variable CORS_ALLOWED_ORIGINS
+    2. Configuration file (station.yaml)
+    3. Default development origins
     """
+    # 1. Environment variable
     cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "")
     if cors_origins_env:
         return [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
-    # Default origins for development
+
+    # 2. Configuration file
+    try:
+        cfg = load_config()
+        if cfg.server.cors.allowed_origins:
+            return cfg.server.cors.allowed_origins
+    except Exception:
+        # Fallback to defaults if config loading fails
+        pass
+
+    # 3. Default origins for development
     return [
         "http://localhost:3000",
         "http://localhost:3001",
