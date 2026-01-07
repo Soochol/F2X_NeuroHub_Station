@@ -242,11 +242,35 @@ class BatchProcess:
             from station_service.batch.worker import BatchWorker
             from station_service.models.config import BatchConfig, BackendConfig, WorkflowConfig
 
-            # Reconstruct configs
-            config = BatchConfig(**config_dict)
-            backend_config = BackendConfig(**backend_config_dict) if backend_config_dict else None
-            workflow_config = WorkflowConfig(**workflow_config_dict) if workflow_config_dict else None
+            # Reconstruct configs from dicts
+            logger.debug(f"[_run_worker] Reconstructing config for batch {batch_id}")
+            logger.debug(f"[_run_worker] config_dict keys: {list(config_dict.keys())}")
+            logger.debug(f"[_run_worker] backend_config_dict keys: {list(backend_config_dict.keys()) if backend_config_dict else 'None'}")
+            
+            try:
+                config = BatchConfig(**config_dict)
+                logger.debug(f"[_run_worker] BatchConfig reconstructed successfully")
+            except Exception as e:
+                logger.error(f"[_run_worker] Failed to reconstruct BatchConfig: {e}", exc_info=True)
+                raise
 
+            backend_config = None
+            if backend_config_dict:
+                try:
+                    backend_config = BackendConfig(**backend_config_dict)
+                    logger.debug(f"[_run_worker] BackendConfig reconstructed successfully")
+                except Exception as e:
+                    logger.error(f"[_run_worker] Failed to reconstruct BackendConfig: {e}", exc_info=True)
+                    raise
+            
+            workflow_config = None
+            if workflow_config_dict:
+                try:
+                    workflow_config = WorkflowConfig(**workflow_config_dict)
+                    logger.debug(f"[_run_worker] WorkflowConfig reconstructed successfully")
+                except Exception as e:
+                    logger.error(f"[_run_worker] Failed to reconstruct WorkflowConfig: {e}", exc_info=True)
+                    raise
             if backend_config:
                 logger.info(f"Backend integration enabled: {backend_config.url}")
             else:

@@ -228,14 +228,22 @@ class BatchManager:
             BatchAlreadyRunningError: If batch is already running
         """
         # Validate batch exists in config
+        logger.debug(f"Starting batch {batch_id}...")
         if batch_id not in self._batch_configs:
+            logger.error(f"Batch startup failed: {batch_id} not in _batch_configs. Available: {list(self._batch_configs.keys())}")
             raise BatchNotFoundError(batch_id)
 
         # Check if already running
         if batch_id in self._batches:
+            logger.warning(f"Batch {batch_id} is already running")
             raise BatchAlreadyRunningError(batch_id)
 
-        batch_config = self._batch_configs[batch_id]
+        try:
+            batch_config = self._batch_configs[batch_id]
+        except KeyError:
+            # Extremely unlikely given the check above, but for defensive programming
+            logger.error(f"KeyError accessing _batch_configs[{batch_id}] after membership check")
+            raise BatchNotFoundError(batch_id)
 
         # Auto-load hardware from manifest if not explicitly provided
         if not batch_config.hardware and batch_config.sequence_package:
@@ -269,7 +277,8 @@ class BatchManager:
         except IPCTimeoutError:
             # Cleanup on failure
             logger.error(f"Batch {batch_id} worker failed to connect within timeout")
-            del self._batches[batch_id]
+            # Use pop for safe deletion as _monitor_loop might have already removed it
+            self._batches.pop(batch_id, None)
             await batch.stop()
             raise BatchError(f"Batch '{batch_id}' worker failed to initialize within timeout")
 
@@ -395,12 +404,15 @@ class BatchManager:
             Batch status dictionary
         """
         # Get config
+        # Capture config and check running status before any await
         if batch_id not in self._batch_configs:
             raise BatchNotFoundError(batch_id)
-
         config = self._batch_configs[batch_id]
-        is_running = batch_id in self._batches
-
+        
+        # Check running status without await
+        batch = self._batches.get(batch_id)
+        is_running = batch is not None and batch.is_alive
+        
         status = {
             "id": batch_id,
             "name": config.name,
@@ -414,6 +426,11 @@ class BatchManager:
         # Get detailed status from worker if running
         if is_running and self._ipc_server.is_worker_connected(batch_id):
             try:
+                # Re-check running status after any potential context switching
+                batch = self._batches.get(batch_id)
+                if batch is None or not batch.is_alive:
+                    return status
+
                 response = await self._ipc_server.send_command(
                     batch_id,
                     CommandType.GET_STATUS,
@@ -434,15 +451,23 @@ class BatchManager:
             List of batch status dictionaries
         """
         statuses = []
-        for batch_id in self._batch_configs:
+        # Capture keys snapshot to avoid 'dictionary changed size during iteration'
+        batch_ids = list(self._batch_configs.keys())
+        for batch_id in batch_ids:
             try:
                 status = await self.get_batch_status(batch_id)
                 statuses.append(status)
+            except BatchNotFoundError:
+                # Batch was removed during iteration
+                continue
             except Exception as e:
                 logger.error(f"Error getting status for {batch_id}: {e}")
+                # If get_batch_status fails for other reasons, we can still append an error status
+                # but the instruction was to `continue` here.
+                # Reverting to original behavior for non-BatchNotFoundError, as it provides more info.
                 statuses.append({
                     "id": batch_id,
-                    "name": self._batch_configs[batch_id].name,
+                    "name": self._batch_configs[batch_id].name, # This might fail if batch_id was removed
                     "status": "error",
                     "error": str(e),
                 })
@@ -1003,7 +1028,7 @@ class BatchManager:
                         logger.error(f"Batch {batch_id} process died unexpectedly")
 
                         # Clean up
-                        del self._batches[batch_id]
+                        self._batches.pop(batch_id, None)
                         self._ipc_server.unregister_worker(batch_id)
 
                         # Emit crash event

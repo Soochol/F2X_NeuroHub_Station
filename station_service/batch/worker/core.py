@@ -8,6 +8,7 @@ lifecycle management, IPC connection, and signal handling.
 import asyncio
 import logging
 import signal
+import sys
 from typing import Any, Dict, Optional
 
 from station_service.ipc import IPCClient
@@ -130,10 +131,13 @@ class BatchWorker(BackendMixin, ExecutionMixin, HardwareMixin, CommandsMixin):
         """
         logger.info(f"BatchWorker {self._batch_id} starting")
 
-        # Setup signal handlers
+        # Setup signal handlers (if supported by event loop)
         loop = asyncio.get_event_loop()
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, self._handle_signal)
+        if hasattr(loop, "add_signal_handler"):
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, self._handle_signal)
+        else:
+            logger.debug("Signal handlers not supported by event loop (skipping)")
 
         try:
             # Connect to IPC

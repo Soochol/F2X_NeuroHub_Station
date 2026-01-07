@@ -27,7 +27,6 @@ server:
       - http://192.168.35.86:8080
       - http://192.168.35.181:9090
       - http://192.168.35.181:5175
-      - http://localhost:9090
 paths:
   sequences_dir: ./sequences
   data_dir: ./data
@@ -39,7 +38,7 @@ backend:
 batches:
 - id: batch-1767749459070-gcz6o9w-0
   name: stm32_firmware_upload
-  sequence_package: sequences/stm32_firmware_upload
+  sequence_package: stm32_firmware_upload
   auto_start: false
   process_id: 1
   parameters:
@@ -58,7 +57,7 @@ batches:
     processId: 1
 - id: batch-1767750928291-o963nlv-0
   name: psa_sensor_test
-  sequence_package: sequences/psa_sensor_test
+  sequence_package: psa_sensor_test
   auto_start: false
   parameters:
     port: /dev/ttyUSB0
@@ -73,7 +72,7 @@ batches:
     stop_on_failure: true
 - id: batch-1767753007251-cz8lxji-0
   name: eol_force_test
-  sequence_package: sequences/eol_force_test
+  sequence_package: eol_force_test
   auto_start: false
   parameters:
     stop_on_failure: true
