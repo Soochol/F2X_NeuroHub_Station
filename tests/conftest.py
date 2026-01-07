@@ -40,6 +40,8 @@ from station_service.storage.database import Database
 @pytest.fixture(scope="session")
 def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     """Create an event loop for the test session."""
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     policy = asyncio.get_event_loop_policy()
     loop = policy.new_event_loop()
     yield loop

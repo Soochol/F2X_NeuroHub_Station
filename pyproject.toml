@@ -26,6 +26,7 @@ dependencies = [
     "station-service-sdk @ git+https://github.com/Soochol/station-service-sdk.git",
     "pyserial>=3.5",
     "pyserial-asyncio>=0.6",
+    "tornado>=6.1",
 ]
 
 [dependency-groups]

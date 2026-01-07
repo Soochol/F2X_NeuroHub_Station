@@ -221,7 +221,12 @@ class BatchProcess:
         # Import here to avoid circular imports and ensure
         # we're importing in the subprocess context
         import asyncio
+        import sys
         import logging
+
+        # Fix for zmq and asyncio on Windows
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
         # Configure logging for subprocess
         logging.basicConfig(

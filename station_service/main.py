@@ -16,12 +16,17 @@ Usage:
     STATION_CONFIG=/path/to/station.yaml python -m station_service.main
 """
 
+import asyncio
 import logging
 import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
+
+# Fix for zmq and asyncio on Windows
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import yaml
 from fastapi import FastAPI
@@ -420,6 +425,7 @@ def main():
         host=host,
         port=port,
         reload=False,
+        loop="asyncio",
         log_level="info",
     )
 
