@@ -1,7 +1,7 @@
 """
-PSA Sensor Test Sequence Package
+STM32 Firmware Upload Sequence Package
 
-Provides automated test sequence for VL53L0X and MLX90640 sensors.
+ST-LINK를 사용하여 STM32 MCU에 펌웨어를 업로드하는 시퀀스.
 """
 
 # Configure loguru to disable default stderr handler
@@ -16,6 +16,6 @@ logger.add(
     format="{time:HH:mm:ss} | {name}:{function}:{line} - {message}"
 )  # Custom format without level (UI badge shows level separately)
 
-from .sequence import PSASensorTestSequence
+from .sequence import STM32FirmwareUpload
 
-__all__ = ["PSASensorTestSequence"]
+__all__ = ["STM32FirmwareUpload"]
