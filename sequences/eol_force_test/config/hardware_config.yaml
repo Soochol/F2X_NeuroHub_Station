@@ -8,8 +8,8 @@ robot:
   irq_no: 7
 
 loadcell:
-  model: mock          # mock | bs205
-  port: COM8
+  model: bs205         # mock | bs205
+  port: COM7
   baudrate: 9600
 
 mcu:
