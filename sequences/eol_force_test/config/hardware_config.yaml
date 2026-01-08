@@ -12,7 +12,7 @@ loadcell:
   port: COM7
   baudrate: 9600
   bytesize: 8
-  parity: null
+  parity: even
   stopbits: 1
   indicator_id: 0
 

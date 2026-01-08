@@ -298,6 +298,7 @@ class BS205LoadCell(LoadCellService):
             # Settings to try: (baudrate, bytesize, parity, stopbits)
             settings_to_try = [
                 (self._baudrate, self._bytesize, self._parity, self._stopbits), # User defined
+                (9600, 8, "even", 1),
                 (9600, 8, None, 1),
                 (9600, 7, "even", 1),
                 (19200, 8, None, 1),
