@@ -9,6 +9,12 @@ import asyncio
 from typing import Any, Dict, Optional
 from loguru import logger
 
+# Local application imports
+from domain.enums.measurement_units import MeasurementUnit
+from domain.value_objects.measurements import ForceValue
+
+__version__ = "1.1.0-brute-force"
+
 from ...interfaces import LoadCellService
 from ...driver.serial import SerialConnection, SerialManager
 from ...driver.serial.exceptions import (
@@ -322,12 +328,13 @@ class BS205LoadCell(LoadCellService):
                         await self._connection.disconnect()
                     
                     self._connection = await SerialManager.create_connection(
-                        port=self._port, baudrate=baud, timeout=0.5,
+                        port=self._port, baudrate=baud, timeout=1.0, # Increased connect timeout
                         bytesize=size, parity=par, stopbits=stop
                     )
                     # Assert signals - critical for some hardware
                     await self._connection.set_dtr(True)
                     await self._connection.set_rts(True)
+                    await asyncio.sleep(0.5) # Settle time after signal assertion
                     
                     # Phase 1: Passive Read (Stream Mode)
                     passive_data = await self._read_response(timeout=0.8)
