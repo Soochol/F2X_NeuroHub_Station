@@ -211,8 +211,14 @@ class IPCEvent:
         overall_pass: bool,
         duration: float,
         result: Optional[Dict[str, Any]] = None,
+        steps: Optional[list] = None,
     ) -> "IPCEvent":
-        """Create sequence complete event."""
+        """Create sequence complete event.
+
+        Args:
+            steps: List of step results to include in the event.
+                   This ensures step data is preserved when sequence completes.
+        """
         return cls(
             type=EventType.SEQUENCE_COMPLETE,
             batch_id=batch_id,
@@ -221,6 +227,7 @@ class IPCEvent:
                 "overall_pass": overall_pass,
                 "duration": duration,
                 "result": result or {},
+                "steps": steps or [],
             },
         )
 

@@ -329,12 +329,15 @@ class ExecutionMixin:
                             },
                         )
 
-        # Publish completion event
+        # Publish completion event with step results
+        # Include steps to ensure frontend preserves step data after completion
+        steps_data = self._state.execution.step_results if self._state.execution else []
         await self._ipc.sequence_complete(
             execution_id=execution_id,
             overall_pass=overall_pass,
             duration=duration,
             result=result,
+            steps=steps_data,
         )
 
         # Save execution result to database

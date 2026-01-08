@@ -107,6 +107,7 @@ interface BatchState {
   updateStepResult: (batchId: string, stepResult: StepResult) => void;
   startStep: (batchId: string, stepName: string, stepIndex: number, totalSteps: number, executionId?: string, stepNames?: string[]) => void;
   completeStep: (batchId: string, stepName: string, stepIndex: number, duration: number, pass: boolean, result?: Record<string, unknown>, executionId?: string) => void;
+  completeSequence: (batchId: string, overallPass: boolean, duration: number, executionId?: string, steps?: StepResult[]) => void;
   clearSteps: (batchId: string) => void;
   selectBatch: (batchId: string | null) => void;
   clearBatches: () => void;
@@ -504,6 +505,41 @@ export const useBatchStore = create<BatchState>((set, get) => ({
       });
 
       log.batch(batchId, 'completeStep', { step: stepName, pass, progress: progress.toFixed(2) });
+      return { batches: newBatches, batchesVersion: state.batchesVersion + 1 };
+    }),
+
+  completeSequence: (batchId, overallPass, duration, executionId?, steps?) =>
+    set((state) => {
+      // Ensure batch exists (handles WS events before API data)
+      const [batchesWithEntry, batch] = ensureBatchExists(
+        state.batches,
+        batchId,
+        { status: 'completed', executionId }
+      );
+
+      // Race condition guard - only check if both have executionId
+      if (executionId && batch.executionId && batch.executionId !== executionId) {
+        log.debug('completeSequence IGNORED: executionId mismatch');
+        return state;
+      }
+
+      const newBatches = new Map(batchesWithEntry);
+
+      // Use steps from event if provided and non-empty, otherwise keep existing
+      // This ensures step data is preserved after sequence completion
+      const finalSteps = steps && steps.length > 0 ? steps : (batch.steps || []);
+
+      newBatches.set(batchId, {
+        ...batch,
+        status: 'completed',
+        progress: 1.0,
+        elapsed: duration,
+        lastRunPassed: overallPass,
+        executionId: executionId || batch.executionId,
+        steps: finalSteps,
+      });
+
+      log.batch(batchId, 'completeSequence', { pass: overallPass, duration: duration.toFixed(2), hasSteps: finalSteps.length > 0, stepCount: finalSteps.length });
       return { batches: newBatches, batchesVersion: state.batchesVersion + 1 };
     }),
 

@@ -82,6 +82,7 @@ export function WebSocketProvider({ children, url = '/ws' }: WebSocketProviderPr
   const incrementBatchStats = useBatchStore((s) => s.incrementBatchStats);
   const startStep = useBatchStore((s) => s.startStep);
   const completeStep = useBatchStore((s) => s.completeStep);
+  const completeSequence = useBatchStore((s) => s.completeSequence);
   const clearSteps = useBatchStore((s) => s.clearSteps);
   const addLog = useLogStore((s) => s.addLog);
   const addNotification = useNotificationStore((s) => s.addNotification);
@@ -170,9 +171,26 @@ export function WebSocketProvider({ children, url = '/ws' }: WebSocketProviderPr
         }
 
         case 'sequence_complete': {
-          // Pass executionId and duration (as elapsed) to updateBatchStatus
-          updateBatchStatus(message.batchId, 'completed', message.data.executionId, message.data.duration);
-          setLastRunResult(message.batchId, message.data.overallPass);
+          // Convert steps from event to StepResult format
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const steps = message.data.steps?.map((step: any) => ({
+            order: step.order || 0,
+            name: step.name,
+            status: step.status || 'completed',
+            pass: step.status === 'completed',
+            duration: step.duration,
+            result: step.result,
+          }));
+
+          // Use completeSequence to update batch with steps included
+          // This ensures step data is preserved after API polling resumes
+          completeSequence(
+            message.batchId,
+            message.data.overallPass,
+            message.data.duration,
+            message.data.executionId,
+            steps
+          );
           incrementBatchStats(message.batchId, message.data.overallPass);
           addLog({
             id: generateLogId(),
@@ -271,7 +289,7 @@ export function WebSocketProvider({ children, url = '/ws' }: WebSocketProviderPr
         }
       }
     },
-    [updateBatchStatus, updateStepProgress, setLastRunResult, incrementBatchStats, startStep, completeStep, clearSteps, addLog, addNotification, queryClient]
+    [updateBatchStatus, updateStepProgress, setLastRunResult, incrementBatchStats, startStep, completeStep, completeSequence, clearSteps, addLog, addNotification, queryClient]
   );
 
   // Connect to WebSocket

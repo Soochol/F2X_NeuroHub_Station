@@ -405,11 +405,17 @@ class IPCClient:
         overall_pass: bool,
         duration: float,
         result: Optional[Dict[str, Any]] = None,
+        steps: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
-        """Publish a sequence complete event."""
+        """Publish a sequence complete event.
+
+        Args:
+            steps: List of step results to include in the event.
+                   This ensures step data is preserved when sequence completes.
+        """
         await self.publish_event(
             IPCEvent.sequence_complete(
-                self._batch_id, execution_id, overall_pass, duration, result
+                self._batch_id, execution_id, overall_pass, duration, result, steps
             )
         )
 
