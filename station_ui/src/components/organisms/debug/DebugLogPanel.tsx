@@ -6,6 +6,7 @@ import { useMemo, useState, useCallback, useEffect } from 'react';
 import { FileText, Database, Download, Trash2, Settings, Sliders, Copy, Check } from 'lucide-react';
 import { useDebugPanelStore, type DebugPanelTab } from '../../../stores/debugPanelStore';
 import { useLogStore } from '../../../stores';
+import { copyToClipboard } from '../../../utils';
 import { LogFilters } from './LogFilters';
 import { LogEntryList } from './LogEntryList';
 import { StepDataViewer } from './StepDataViewer';
@@ -37,11 +38,10 @@ function TabButton({ label, icon, isActive, onClick }: TabButtonProps) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-        isActive
+      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${isActive
           ? 'bg-zinc-800 text-zinc-100 border-b-2 border-brand-500'
           : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-      }`}
+        }`}
     >
       {icon}
       {label}
@@ -111,12 +111,10 @@ export function DebugLogPanel({ batchId, steps, isRunning = false, onPendingChan
 
   const handleCopyLogs = useCallback(async () => {
     const content = formatLogsAsText();
-    try {
-      await navigator.clipboard.writeText(content);
+    const success = await copyToClipboard(content);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy logs:', err);
     }
   }, [formatLogsAsText]);
 
