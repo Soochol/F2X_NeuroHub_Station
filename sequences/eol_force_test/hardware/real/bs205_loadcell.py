@@ -330,9 +330,6 @@ class BS205LoadCell(LoadCellService):
                         port=self._port, baudrate=baud, timeout=1.0, # Increased connect timeout
                         bytesize=size, parity=par, stopbits=stop
                     )
-                    # Assert signals - critical for some hardware
-                    await self._connection.set_dtr(True)
-                    await self._connection.set_rts(True)
                     await asyncio.sleep(0.5) # Settle time after signal assertion
                     
                     # Phase 1: Passive Read (Stream Mode)
@@ -345,7 +342,8 @@ class BS205LoadCell(LoadCellService):
 
                     # Phase 2: Binary ID Scan (mostly 0 and 1)
                     for tid in [0, 1]:
-                        binary_cmd = bytes([0x30 + tid, ord(CMD_READ_WEIGHT)])
+                        # Append CRLF to probe command
+                        binary_cmd = bytes([0x30 + tid, ord(CMD_READ_WEIGHT), 0x0D, 0x0A])
                         logger.debug(f"  Trying Binary ID={tid}...")
                         await self._connection.write(binary_cmd)
                         await asyncio.sleep(0.2)
