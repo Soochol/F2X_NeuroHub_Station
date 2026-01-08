@@ -235,30 +235,8 @@ class CommandsMixin:
                 return IPCResponse.error(command.request_id, str(e))
 
             except BackendError as e:
-                # Check if it's a client error (4xx) - should fail, not continue offline
-                if e.status_code and 400 <= e.status_code < 500:
-                    logger.error(f"Client error during 착공: {e}")
-                    return IPCResponse.error(command.request_id, str(e))
-
-                # Server error (5xx) or connection error - continue in offline mode
-                logger.warning(f"Backend error during 착공, continuing offline: {e}")
-                self._state.backend.is_online = False
-
-                # Queue for later sync
-                await self.queue_for_offline_sync(
-                    "wip_process",
-                    wip_id_string,
-                    "start_process",
-                    {
-                        "wip_int_id": wip_int_id_resolved,
-                        "request": {
-                            "process_id": process_id,
-                            "operator_id": operator_id,
-                            "equipment_id": equipment_id,
-                            "started_at": datetime.now(timezone.utc).isoformat(),
-                        },
-                    },
-                )
+                logger.error(f"착공 실패: {e}")
+                return IPCResponse.error(command.request_id, f"착공 실패: {e}")
         else:
             # No WIP context - running sequence without Backend integration
             logger.debug("Running sequence without Backend integration (no wip_id)")

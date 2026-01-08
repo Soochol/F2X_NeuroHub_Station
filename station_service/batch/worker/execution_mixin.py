@@ -299,35 +299,13 @@ class ExecutionMixin:
                 )
 
             except Exception as e:
-                from station_service.core.exceptions import BackendError
-
                 error_message = e.message if hasattr(e, 'message') else str(e)
                 await self._ipc.error(
                     code="COMPLETE_PROCESS_FAILED",
                     message=f"완공 실패: {error_message}",
                     step="complete_process",
                 )
-                logger.warning(f"Backend error during 완공: {e}")
-
-                # Queue for offline sync if transient error
-                if isinstance(e, BackendError):
-                    if e.status_code in (500, 502, 503, 504) or "connection" in str(e).lower():
-                        await self.queue_for_offline_sync(
-                            "wip_process",
-                            exec_state.wip_id or "",
-                            "complete_process",
-                            {
-                                "wip_int_id": exec_state.wip_int_id,
-                                "process_id": exec_state.process_id,
-                                "operator_id": exec_state.operator_id,
-                                "request": {
-                                    "result": "PASS" if overall_pass else "FAIL",
-                                    "measurements": result.get("measurements", {}),
-                                    "defects": self.extract_defects_from_result(result),
-                                    "completed_at": datetime.now(timezone.utc).isoformat(),
-                                },
-                            },
-                        )
+                logger.error(f"완공 실패: {e}")
 
         # Publish completion event with step results
         # Include steps to ensure frontend preserves step data after completion
