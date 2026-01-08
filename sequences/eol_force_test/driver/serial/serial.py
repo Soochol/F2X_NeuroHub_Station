@@ -181,6 +181,32 @@ class SerialConnection:
             logger.debug(f"Native buffer flush failed: {e}")
         return False
 
+    async def set_dtr(self, state: bool) -> bool:
+        """Set DTR (Data Terminal Ready) line state"""
+        try:
+            if hasattr(self._writer, "transport") and self._writer.transport:
+                serial_instance = getattr(self._writer.transport, "serial", None)
+                if serial_instance and hasattr(serial_instance, "dtr"):
+                    serial_instance.dtr = state
+                    logger.debug(f"DTR set to {state}")
+                    return True
+        except Exception as e:
+            logger.debug(f"Failed to set DTR: {e}")
+        return False
+
+    async def set_rts(self, state: bool) -> bool:
+        """Set RTS (Request To Send) line state"""
+        try:
+            if hasattr(self._writer, "transport") and self._writer.transport:
+                serial_instance = getattr(self._writer.transport, "serial", None)
+                if serial_instance and hasattr(serial_instance, "rts"):
+                    serial_instance.rts = state
+                    logger.debug(f"RTS set to {state}")
+                    return True
+        except Exception as e:
+            logger.debug(f"Failed to set RTS: {e}")
+        return False
+
     async def write(self, data: bytes) -> None:
         """
         Write data to serial port

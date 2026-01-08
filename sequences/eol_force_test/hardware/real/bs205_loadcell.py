@@ -102,6 +102,9 @@ class BS205LoadCell(LoadCellService):
                 stopbits=self._stopbits,
                 parity=self._parity,
             )
+            # Assert signals by default as some converters/devices require them
+            await self._connection.set_dtr(True)
+            await self._connection.set_rts(True)
             self._is_connected = True
 
         except (SerialCommunicationError, SerialConnectionError, SerialTimeoutError) as e:
@@ -285,51 +288,88 @@ class BS205LoadCell(LoadCellService):
             return None
 
     async def _probe_hardware(self):
-        """Probe for Stream Mode or correct ID/Protocol."""
+        """Exhaustive probe for Stream Mode or correct ID/Protocol/Baudrate."""
         async with self._probe_lock:
             if self._detected_mode is not None:
                 return
 
-            logger.info("Probing LoadCell communication...")
+            logger.info("Starting exhaustive LoadCell probing...")
+            
+            # Settings to try: (baudrate, bytesize, parity, stopbits)
+            settings_to_try = [
+                (self._baudrate, self._bytesize, self._parity, self._stopbits), # User defined
+                (9600, 8, None, 1),
+                (9600, 7, "even", 1),
+                (19200, 8, None, 1),
+                (19200, 7, "even", 1),
+            ]
+            
+            # Deduplicate settings
+            unique_settings = []
+            seen = set()
+            for s in settings_to_try:
+                if s not in seen:
+                    unique_settings.append(s)
+                    seen.add(s)
 
-            # Phase 1: Passive Read (Stream Mode Check)
-            # SDK-standard enhancement: Don't flush yet, see if data is already coming
-            passive_data = await self._read_response(timeout=1.0)
-            if passive_data:
-                logger.info(f"Stream Mode detected! Received {len(passive_data)} bytes passively.")
-                self._detected_mode = "stream"
-                return
+            for baud, size, par, stop in unique_settings:
+                logger.info(f"Probing settings: {baud} {size}{par[0].upper() if par else 'N'}{int(stop)}")
+                
+                try:
+                    # Reconnect with new settings
+                    if self._connection:
+                        await self._connection.disconnect()
+                    
+                    self._connection = await SerialManager.create_connection(
+                        port=self._port, baudrate=baud, timeout=0.5,
+                        bytesize=size, parity=par, stopbits=stop
+                    )
+                    # Assert signals - critical for some hardware
+                    await self._connection.set_dtr(True)
+                    await self._connection.set_rts(True)
+                    
+                    # Phase 1: Passive Read (Stream Mode)
+                    passive_data = await self._read_response(timeout=0.8)
+                    if passive_data:
+                        logger.info(f"Stream Mode detected at {baud} baud! Hex: {passive_data.hex().upper()}")
+                        self._detected_mode = "stream"
+                        self._baudrate, self._bytesize, self._parity, self._stopbits = baud, size, par, stop
+                        return
 
-            # Phase 2: ID Scan (Common IDs: 0, 1, 2, 10, 15)
-            # Reverting flush here only if passive fails
-            try:
-                await self._connection.flush_input_buffer()
-            except: pass
+                    # Phase 2: Binary ID Scan (mostly 0 and 1)
+                    for tid in [0, 1]:
+                        binary_cmd = bytes([0x30 + tid, ord(CMD_READ_WEIGHT)])
+                        logger.debug(f"  Trying Binary ID={tid}...")
+                        await self._connection.write(binary_cmd)
+                        await asyncio.sleep(0.2)
+                        resp = await self._read_response(timeout=0.5)
+                        if resp:
+                            logger.info(f"Found working Binary ID: {tid} at {baud} baud")
+                            self._detected_mode = "binary"
+                            self._detected_id = tid
+                            self._baudrate, self._bytesize, self._parity, self._stopbits = baud, size, par, stop
+                            return
 
-            for tid in [0, 1, 2, 10, 15]:
-                id_byte = 0x30 + tid
-                binary_cmd = bytes([id_byte, ord(CMD_READ_WEIGHT)])
-                logger.debug(f"Probing Binary ID={tid}...")
-                await self._connection.write(binary_cmd)
-                await asyncio.sleep(0.3)
-                resp = await self._read_response(timeout=1.0)
-                if resp:
-                    logger.info(f"Found working Binary ID: {tid}")
-                    self._detected_mode = "binary"
-                    self._detected_id = tid
-                    return
+                    # Phase 3: ASCII Fallback
+                    logger.debug("  Trying ASCII R\\r...")
+                    await self._connection.write(b"R\r")
+                    await asyncio.sleep(0.2)
+                    resp = await self._read_response(timeout=0.5)
+                    if resp:
+                        logger.info(f"Found working ASCII mode at {baud} baud")
+                        self._detected_mode = "ascii"
+                        self._baudrate, self._bytesize, self._parity, self._stopbits = baud, size, par, stop
+                        return
+                        
+                except Exception as e:
+                    logger.debug(f"Failed to probe settings {baud}: {e}")
+                    continue
 
-            # Phase 3: ASCII Fallback
-            logger.debug("Probing ASCII R\\r...")
-            await self._connection.write(b"R\r")
-            await asyncio.sleep(0.3)
-            resp = await self._read_response(timeout=1.0)
-            if resp:
-                logger.info("Found working ASCII mode")
-                self._detected_mode = "ascii"
-                return
-
-            logger.warning("All LoadCell probes failed. Check physical connection/settings.")
+            logger.warning("All exhaustive LoadCell probes failed. Please check physical connection.")
+            # Revert to original settings for final failure log
+            if self._connection:
+                await self._connection.disconnect()
+            await self.connect()
 
     async def _read_response(self, timeout: float) -> bytes:
         """Read BS205 response with retry for incomplete reads.
