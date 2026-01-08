@@ -109,8 +109,9 @@ class BS205LoadCell(LoadCellService):
                 parity=self._parity,
             )
             # Assert signals by default as some converters/devices require them
-            await self._connection.set_dtr(True)
-            await self._connection.set_rts(True)
+            # Disabled for BS205/RS485 as per user request to avoid interference
+            # await self._connection.set_dtr(True)
+            # await self._connection.set_rts(True)
             self._is_connected = True
 
         except (SerialCommunicationError, SerialConnectionError, SerialTimeoutError) as e:
