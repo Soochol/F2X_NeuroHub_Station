@@ -11,6 +11,10 @@ loadcell:
   model: bs205         # mock | bs205
   port: COM7
   baudrate: 9600
+  bytesize: 7
+  parity: even
+  stopbits: 1
+  indicator_id: 1
 
 mcu:
   model: mock          # mock | lma

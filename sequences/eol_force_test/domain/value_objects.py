@@ -157,6 +157,11 @@ class LoadCellConfig:
     model: str = "mock"
     port: str = "COM8"
     baudrate: int = 9600
+    timeout: float = 1.0
+    bytesize: int = 8
+    stopbits: int = 1
+    parity: Optional[str] = None
+    indicator_id: int = 1
 
 
 @dataclass(frozen=True)
@@ -212,7 +217,13 @@ class HardwareConfig:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "robot": {"model": self.robot.model, "axis_id": self.robot.axis_id},
-            "loadcell": {"model": self.loadcell.model, "port": self.loadcell.port},
+            "loadcell": {
+                "model": self.loadcell.model,
+                "port": self.loadcell.port,
+                "baudrate": self.loadcell.baudrate,
+                "parity": self.loadcell.parity,
+                "indicator_id": self.loadcell.indicator_id,
+            },
             "mcu": {"model": self.mcu.model, "port": self.mcu.port},
             "power": {"model": self.power.model, "host": self.power.host},
             "digital_io": {"model": self.digital_io.model},

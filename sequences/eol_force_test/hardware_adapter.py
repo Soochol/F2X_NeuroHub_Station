@@ -395,6 +395,11 @@ def create_standalone_hardware_adapter(
             "connection": {
                 "port": hardware_config.loadcell.port,
                 "baudrate": hardware_config.loadcell.baudrate,
+                "timeout": hardware_config.loadcell.timeout,
+                "bytesize": hardware_config.loadcell.bytesize,
+                "stopbits": hardware_config.loadcell.stopbits,
+                "parity": hardware_config.loadcell.parity,
+                "indicator_id": hardware_config.loadcell.indicator_id,
             },
         },
         "mcu": {

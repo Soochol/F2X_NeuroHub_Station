@@ -7,6 +7,7 @@ Standalone version for EOL Tester package.
 
 import asyncio
 from typing import Any, Dict, Optional
+from loguru import logger
 
 from ...interfaces import LoadCellService
 from ...driver.serial import SerialConnection, SerialManager
@@ -173,7 +174,7 @@ class BS205LoadCell(LoadCellService):
             except Exception as e:
                 error_count += 1
                 last_error = e
-                print(f"DEBUG: Force sample failed ({error_count}): {e}")
+                logger.error(f"Force sample failed ({error_count}): {e}")
                 continue
 
         if not samples:
@@ -230,7 +231,7 @@ class BS205LoadCell(LoadCellService):
             try:
                 await self._connection.flush_input_buffer()
             except Exception as e:
-                print(f"DEBUG: Failed to flush input buffer: {e}")
+                logger.warning(f"Failed to flush input buffer: {e}")
 
             current_time = asyncio.get_event_loop().time()
             time_since_last = current_time - self._last_command_time
@@ -245,7 +246,7 @@ class BS205LoadCell(LoadCellService):
             cmd_byte = ord(command)
             command_bytes = bytes([id_byte, cmd_byte])
 
-            print(f"DEBUG: Sending BS205 command: {command_bytes.hex().upper()} (ID={self._indicator_id}, CMD={command})")
+            logger.debug(f"Sending BS205 command: {command_bytes.hex().upper()} (ID={self._indicator_id}, CMD={command})")
             await self._connection.write(command_bytes)
             self._last_command_time = asyncio.get_event_loop().time()
 
@@ -258,10 +259,10 @@ class BS205LoadCell(LoadCellService):
             response_buffer = await self._read_response(cmd_timeout)
 
             if not response_buffer:
-                print(f"DEBUG: No response received for command {command}")
+                logger.warning(f"No response received for command {command}")
                 raise BS205CommunicationError(f"No response received for command {command}")
             
-            print(f"DEBUG: Received BS205 response: {response_buffer.hex().upper()}")
+            logger.debug(f"Received BS205 response: {response_buffer.hex().upper()}")
             return self._parse_bs205_response(response_buffer)
 
     async def _read_response(self, timeout: float) -> bytes:
@@ -291,7 +292,7 @@ class BS205LoadCell(LoadCellService):
             return response
 
         except Exception as e:
-            print(f"DEBUG: Error reading LoadCell response: {e}")
+            logger.error(f"Error reading LoadCell response: {e}")
             return b""
 
     def _parse_bs205_response(self, response_bytes: bytes) -> str:
