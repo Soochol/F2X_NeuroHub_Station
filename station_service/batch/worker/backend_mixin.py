@@ -38,6 +38,7 @@ class BackendMixinProtocol(Protocol):
     _sync_repo: Optional["SyncRepository"]
     _state: "WorkerState"
     _config: "BatchConfig"
+    _token_info_dict: Optional[Dict[str, Any]]
 
     @property
     def batch_id(self) -> str: ...
@@ -63,7 +64,10 @@ class BackendMixin:
 
         try:
             from station_service.sync.backend_client import BackendClient
-            from station_service.core.token_manager import get_token_manager
+            from station_service.core.token_manager import (
+                get_token_manager,
+                TokenInfo,
+            )
             from station_service.api.routes.system import update_operator_tokens
 
             self._backend_client = BackendClient(self._backend_config)
@@ -71,6 +75,26 @@ class BackendMixin:
 
             # Connect TokenManager for automatic token refresh
             token_manager = get_token_manager()
+
+            # Initialize TokenManager with tokens passed from main process
+            if self._token_info_dict:
+                token_info = TokenInfo.from_dict(self._token_info_dict)
+                token_manager.set_tokens(
+                    access_token=token_info.access_token,
+                    refresh_token=token_info.refresh_token,
+                    user_id=token_info.user_id,
+                    username=token_info.username,
+                    station_api_key=token_info.station_api_key,
+                )
+                logger.info(
+                    f"TokenManager initialized with operator: {token_info.username}"
+                )
+            else:
+                logger.warning(
+                    "No token info passed to worker - "
+                    "착공/완공 will fail without operator login"
+                )
+
             self._backend_client.set_token_manager(token_manager)
             self._backend_client.set_token_update_callback(update_operator_tokens)
             logger.info("Worker BackendClient connected with TokenManager")

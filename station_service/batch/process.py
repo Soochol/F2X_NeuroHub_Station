@@ -105,6 +105,18 @@ class BatchProcess:
         backend_config_dict = self._backend_config.model_dump() if self._backend_config else None
         workflow_config_dict = self._workflow_config.model_dump() if self._workflow_config else None
 
+        # Get current operator token info for worker process
+        token_info_dict = None
+        try:
+            from station_service.core.token_manager import get_token_manager
+            token_manager = get_token_manager()
+            token_info = token_manager.get_token_info()
+            if token_info:
+                token_info_dict = token_info.to_dict()
+                logger.debug(f"Passing token info to worker: user={token_info.username}")
+        except Exception as e:
+            logger.warning(f"Failed to get token info for worker: {e}")
+
         # Create process
         self._process = multiprocessing.Process(
             target=self._run_worker,
@@ -115,6 +127,7 @@ class BatchProcess:
                 self._ipc_sub_address,
                 backend_config_dict,
                 workflow_config_dict,
+                token_info_dict,
             ),
             daemon=True,
             name=f"batch-{self._batch_id}",
@@ -204,6 +217,7 @@ class BatchProcess:
         ipc_sub_address: str,
         backend_config_dict: Optional[Dict[str, Any]] = None,
         workflow_config_dict: Optional[Dict[str, Any]] = None,
+        token_info_dict: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Entry point for the worker subprocess.
@@ -217,6 +231,7 @@ class BatchProcess:
             ipc_sub_address: IPC sub address
             backend_config_dict: Serialized backend configuration for API integration
             workflow_config_dict: Serialized workflow configuration for 착공/완공
+            token_info_dict: Serialized operator token info for JWT authentication
         """
         # Import here to avoid circular imports and ensure
         # we're importing in the subprocess context
@@ -286,6 +301,7 @@ class BatchProcess:
                 ipc_sub_address=ipc_sub_address,
                 backend_config=backend_config,
                 workflow_config=workflow_config,
+                token_info_dict=token_info_dict,
             )
 
             # Run the async main loop

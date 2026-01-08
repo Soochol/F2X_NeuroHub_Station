@@ -62,6 +62,7 @@ class BatchWorker(BackendMixin, ExecutionMixin, HardwareMixin, CommandsMixin):
         ipc_sub_address: str,
         backend_config: Optional[BackendConfig] = None,
         workflow_config: Optional[WorkflowConfig] = None,
+        token_info_dict: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Initialize the BatchWorker.
@@ -73,11 +74,13 @@ class BatchWorker(BackendMixin, ExecutionMixin, HardwareMixin, CommandsMixin):
             ipc_sub_address: IPC sub address for events
             backend_config: Optional backend configuration for API calls
             workflow_config: Optional workflow configuration for 착공/완공
+            token_info_dict: Optional operator token info for JWT authentication
         """
         self._batch_id = batch_id
         self._config = config
         self._backend_config = backend_config
         self._workflow_config = workflow_config or WorkflowConfig()
+        self._token_info_dict = token_info_dict
 
         # IPC client
         self._ipc = IPCClient(
