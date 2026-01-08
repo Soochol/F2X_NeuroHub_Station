@@ -60,3 +60,13 @@ station_ui/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code
+.claude/
+
+# Local data directories
+dat/
+
+# Build artifacts
+station_service/static/assets/
+*.tsbuildinfo
