@@ -11,6 +11,7 @@ export {
   nullLogger,
   type Logger,
 } from './logger';
+export { copyToClipboard } from './clipboard';
 
 /**
  * Utility function for conditionally joining class names.

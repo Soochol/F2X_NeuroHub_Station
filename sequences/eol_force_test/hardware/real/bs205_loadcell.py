@@ -23,6 +23,21 @@ CMD_ZERO = "Z"
 CMD_HOLD = "H"
 CMD_HOLD_RELEASE = "L"
 
+
+class BS205Error(Exception):
+    """Base BS205 LoadCell error"""
+    pass
+
+
+class BS205CommunicationError(BS205Error):
+    """BS205 communication errors"""
+    pass
+
+
+class BS205DataError(BS205Error):
+    """BS205 data processing errors"""
+    pass
+
 # Timing
 ZERO_OPERATION_DELAY = 1.0  # seconds
 
@@ -211,6 +226,12 @@ class BS205LoadCell(LoadCellService):
             raise RuntimeError("No connection available")
 
         async with self._command_lock:
+            # Flush input buffer before sending command to avoid stale data (SDK-standard enhancement)
+            try:
+                await self._connection.flush_input_buffer()
+            except Exception as e:
+                print(f"DEBUG: Failed to flush input buffer: {e}")
+
             current_time = asyncio.get_event_loop().time()
             time_since_last = current_time - self._last_command_time
 
@@ -219,11 +240,12 @@ class BS205LoadCell(LoadCellService):
 
             cmd_timeout = timeout if timeout is not None else 3.0
 
-            # BS205 binary command: ID + Command
+            # BS205 binary command: ID + Command (SDK-standard 2-byte format)
             id_byte = 0x30 + self._indicator_id
             cmd_byte = ord(command)
             command_bytes = bytes([id_byte, cmd_byte])
 
+            print(f"DEBUG: Sending BS205 command: {command_bytes.hex().upper()} (ID={self._indicator_id}, CMD={command})")
             await self._connection.write(command_bytes)
             self._last_command_time = asyncio.get_event_loop().time()
 
@@ -236,8 +258,10 @@ class BS205LoadCell(LoadCellService):
             response_buffer = await self._read_response(cmd_timeout)
 
             if not response_buffer:
-                return None
-
+                print(f"DEBUG: No response received for command {command}")
+                raise BS205CommunicationError(f"No response received for command {command}")
+            
+            print(f"DEBUG: Received BS205 response: {response_buffer.hex().upper()}")
             return self._parse_bs205_response(response_buffer)
 
     async def _read_response(self, timeout: float) -> bytes:
@@ -271,7 +295,7 @@ class BS205LoadCell(LoadCellService):
             return b""
 
     def _parse_bs205_response(self, response_bytes: bytes) -> str:
-        """Parse BS205 binary response to ASCII string."""
+        """Parse BS205 binary response to ASCII string (SDK-standard logic)."""
         if len(response_bytes) < 10:
             return ""
 
@@ -286,24 +310,33 @@ class BS205LoadCell(LoadCellService):
         else:
             data_bytes = response_bytes
 
-        # Convert to ASCII
+        # Convert to ASCII (SDK-standard multi-byte/hex ID handling)
         ascii_data = ""
         for byte_val in data_bytes:
             if 0x20 <= byte_val <= 0x7E:
+                # Replace space with underscore for consistency in parsing
                 ascii_data += "_" if byte_val == 0x20 else chr(byte_val)
-            elif 0x30 <= byte_val <= 0x39:
-                ascii_data += chr(byte_val)
+            else:
+                # Handle special IDs (e.g., 10-15) as per SDK
+                if 0x30 <= byte_val <= 0x39:
+                    ascii_data += chr(byte_val)
+                elif byte_val == 0x3A: # ID 10
+                    ascii_data += "10"
+                elif byte_val == 0x3F: # ID 15
+                    ascii_data += "15"
+                else:
+                    ascii_data += f"[{byte_val:02X}]"
 
         return ascii_data
 
     def _parse_bs205_weight(self, response: str) -> float:
-        """Parse BS205 weight response."""
+        """Parse BS205 weight response (SDK-standard logic)."""
         import re
 
         if not response or len(response) < 3:
-            raise ValueError(f"Invalid BS205 response: '{response}'")
+            raise BS205DataError(f"Invalid BS205 response: '{response}'")
 
-        # Find sign position
+        # Find sign position (SDK-standard logic)
         sign_pos = -1
         for i, char in enumerate(response):
             if char in ["+", "-"]:
@@ -311,27 +344,29 @@ class BS205LoadCell(LoadCellService):
                 break
 
         if sign_pos == -1:
-            raise ValueError(f"Cannot find sign in BS205 response: '{response}'")
+            raise BS205DataError(f"Cannot find sign (+/-) in BS205 response: '{response}'")
 
         sign = response[sign_pos]
         value_part = response[sign_pos + 1 :]
 
-        # Clean value
+        # Value cleaning (SDK-standard logic)
         value_clean = value_part.replace("_", " ").strip()
         value_clean = re.sub(r"\s+", " ", value_clean)
         value_clean = value_clean.replace(" ", "")
 
+        # Handle decimal point leading zeros
         if value_clean.startswith("."):
             value_clean = "0" + value_clean
 
         try:
             weight_value = float(value_clean)
         except ValueError:
+            # Fallback for complex patterns
             numbers = re.findall(r"\d+\.?\d*", value_clean)
             if numbers:
                 weight_value = float(numbers[0])
             else:
-                raise ValueError(f"No valid number found in '{value_clean}'")
+                raise BS205DataError(f"No valid number found in weight part: '{value_clean}'")
 
         if sign == "-":
             weight_value = -weight_value

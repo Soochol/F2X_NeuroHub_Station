@@ -15,6 +15,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useDebugPanelStore } from '../../../stores/debugPanelStore';
+import { copyToClipboard } from '../../../utils';
 import { StatusBadge } from '../../atoms/StatusBadge';
 import type { StepResult } from '../../../types';
 
@@ -37,9 +38,11 @@ function StepRow({ step, isSelected, isExpanded, onToggle, onClick }: StepRowPro
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (step.result) {
-      await navigator.clipboard.writeText(JSON.stringify(step.result, null, 2));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const success = await copyToClipboard(JSON.stringify(step.result, null, 2));
+      if (success) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
     }
   };
 
@@ -57,9 +60,8 @@ function StepRow({ step, isSelected, isExpanded, onToggle, onClick }: StepRowPro
           onClick();
           if (hasData || hasError) onToggle();
         }}
-        className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-zinc-800/50 ${
-          hasData || hasError ? '' : 'opacity-60'
-        }`}
+        className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-zinc-800/50 ${hasData || hasError ? '' : 'opacity-60'
+          }`}
       >
         {/* Expand/collapse icon */}
         <div className="w-4 h-4 flex items-center justify-center">
