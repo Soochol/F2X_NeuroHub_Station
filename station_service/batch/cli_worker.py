@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -77,7 +78,7 @@ class CLISequenceWorker:
         self._on_input_request = on_input_request
 
         # Process state
-        self._process: Optional[asyncio.subprocess.Process] = None
+        self._process: Optional[subprocess.Popen] = None
         self._running = False
         self._execution_id: Optional[str] = None
         self._output_task: Optional[asyncio.Task] = None
@@ -150,19 +151,23 @@ class CLISequenceWorker:
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
 
-            self._process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            # Windows-compatible subprocess creation using Popen
+            # (asyncio.create_subprocess_exec requires ProactorEventLoop,
+            # but ZMQ requires SelectorEventLoop on Windows)
+            self._process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 cwd=str(self._sequences_dir.parent),
                 env=env,
+                bufsize=1,  # Line buffered
             )
             self._running = True
 
-            # Start output parser tasks
-            self._output_task = asyncio.create_task(self._parse_stdout())
-            self._stderr_task = asyncio.create_task(self._parse_stderr())
+            # Start output parser tasks using thread-based readers
+            self._output_task = asyncio.create_task(self._parse_stdout_threaded())
+            self._stderr_task = asyncio.create_task(self._parse_stderr_threaded())
 
             logger.info(f"CLI sequence started: pid={self._process.pid}")
             return self._execution_id
@@ -181,23 +186,30 @@ class CLISequenceWorker:
 
         logger.info(f"Stopping CLI sequence: {self._execution_id}")
 
-        # Send stop command via stdin
+        # Send stop command via stdin (sync for subprocess.Popen)
         try:
             if self._process.stdin:
                 stop_cmd = json.dumps({"type": "command", "action": "stop"})
                 self._process.stdin.write(f"{stop_cmd}\n".encode())
-                await self._process.stdin.drain()
+                self._process.stdin.flush()
         except Exception as e:
             logger.warning(f"Failed to send stop command: {e}")
 
-        # Wait briefly for graceful shutdown
+        # Wait briefly for graceful shutdown using thread
+        loop = asyncio.get_event_loop()
         try:
-            await asyncio.wait_for(self._process.wait(), timeout=5.0)
+            await asyncio.wait_for(
+                loop.run_in_executor(None, self._process.wait),
+                timeout=5.0
+            )
         except asyncio.TimeoutError:
             logger.warning("Sequence didn't stop gracefully, terminating")
             self._process.terminate()
             try:
-                await asyncio.wait_for(self._process.wait(), timeout=3.0)
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, self._process.wait),
+                    timeout=3.0
+                )
             except asyncio.TimeoutError:
                 logger.warning("Sequence didn't terminate, killing")
                 self._process.kill()
@@ -225,8 +237,9 @@ class CLISequenceWorker:
         })
 
         try:
+            # Use sync write/flush for subprocess.Popen
             self._process.stdin.write(f"{response}\n".encode())
-            await self._process.stdin.drain()
+            self._process.stdin.flush()
             logger.debug(f"Sent input response: {request_id} = {value}")
         except Exception as e:
             logger.error(f"Failed to send input response: {e}")
@@ -249,8 +262,9 @@ class CLISequenceWorker:
         if self._stderr_task:
             await self._stderr_task
 
-        # Wait for process to exit
-        return_code = await self._process.wait()
+        # Wait for process to exit (thread-safe for subprocess.Popen)
+        loop = asyncio.get_event_loop()
+        return_code = await loop.run_in_executor(None, self._process.wait)
         self._running = False
 
         logger.info(f"CLI sequence completed: return_code={return_code}")
@@ -279,11 +293,20 @@ class CLISequenceWorker:
 
         return self._final_result
 
-    async def _parse_stdout(self) -> None:
-        """Parse JSON Lines output from stdout."""
+    async def _parse_stdout_threaded(self) -> None:
+        """Parse JSON Lines output from stdout using thread-based I/O."""
+        loop = asyncio.get_event_loop()
+
+        def _read_stdout_line():
+            """Blocking read in thread."""
+            if self._process and self._process.stdout:
+                return self._process.stdout.readline()
+            return b""
+
         try:
-            while self._running and self._process and self._process.stdout:
-                line = await self._process.stdout.readline()
+            while self._running and self._process:
+                # Read one line at a time in thread
+                line = await loop.run_in_executor(None, _read_stdout_line)
                 if not line:
                     break
 
@@ -309,11 +332,19 @@ class CLISequenceWorker:
         except Exception as e:
             logger.exception(f"Error parsing stdout: {e}")
 
-    async def _parse_stderr(self) -> None:
-        """Parse stderr output (usually errors/warnings)."""
+    async def _parse_stderr_threaded(self) -> None:
+        """Parse stderr output using thread-based I/O."""
+        loop = asyncio.get_event_loop()
+
+        def _read_stderr_line():
+            """Blocking read in thread."""
+            if self._process and self._process.stderr:
+                return self._process.stderr.readline()
+            return b""
+
         try:
-            while self._running and self._process and self._process.stderr:
-                line = await self._process.stderr.readline()
+            while self._running and self._process:
+                line = await loop.run_in_executor(None, _read_stderr_line)
                 if not line:
                     break
 
