@@ -6,7 +6,7 @@ import { useMemo, useState, useCallback, useEffect } from 'react';
 import { FileText, Database, Download, Trash2, Settings, Sliders, Copy, Check } from 'lucide-react';
 import { useDebugPanelStore, type DebugPanelTab } from '../../../stores/debugPanelStore';
 import { useLogStore } from '../../../stores';
-import { copyToClipboard } from '../../../utils';
+import { copyToClipboard, toast } from '../../../utils';
 import { LogFilters } from './LogFilters';
 import { LogEntryList } from './LogEntryList';
 import { StepDataViewer } from './StepDataViewer';
@@ -111,10 +111,17 @@ export function DebugLogPanel({ batchId, steps, isRunning = false, onPendingChan
 
   const handleCopyLogs = useCallback(async () => {
     const content = formatLogsAsText();
+    if (!content) {
+      toast.warning('No logs to copy');
+      return;
+    }
     const success = await copyToClipboard(content);
     if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast.success('Logs copied to clipboard');
+    } else {
+      toast.error('Failed to copy logs');
     }
   }, [formatLogsAsText]);
 
