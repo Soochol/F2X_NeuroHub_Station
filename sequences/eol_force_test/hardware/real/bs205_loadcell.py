@@ -318,11 +318,16 @@ class BS205LoadCell(LoadCellService):
 
             # Greedy enhancement: check for any remaining data in short bursts
             # This helps if the protocol length varies or if there's trailing junk
-            while True:
-                additional = await self._connection.read(size=1024, timeout=0.1)
-                if not additional:
-                    break
-                response += additional
+            # Timeout here is expected (no more data), so catch and ignore
+            try:
+                while True:
+                    additional = await self._connection.read(size=1024, timeout=0.1)
+                    if not additional:
+                        break
+                    response += additional
+            except Exception:
+                # Timeout in greedy loop is normal - no more data available
+                pass
 
             if response:
                 logger.debug(f"Read {len(response)} bytes from LoadCell")
