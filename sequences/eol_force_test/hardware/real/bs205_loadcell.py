@@ -233,12 +233,42 @@ class BS205LoadCell(LoadCellService):
             if command in [CMD_HOLD, CMD_HOLD_RELEASE, CMD_ZERO]:
                 return "OK"
 
-            response_buffer = await self._connection.read(size=10, timeout=cmd_timeout)
+            response_buffer = await self._read_response(cmd_timeout)
 
             if not response_buffer:
                 return None
 
             return self._parse_bs205_response(response_buffer)
+
+    async def _read_response(self, timeout: float) -> bytes:
+        """Read BS205 response with retry for incomplete reads.
+
+        BS205 응답은 STX(1) + ID + Sign + Value(7) + ETX(1) = 10바이트 고정
+
+        Args:
+            timeout: Total timeout for reading
+
+        Returns:
+            Response bytes or empty bytes if failed
+        """
+        try:
+            if not self._connection:
+                raise RuntimeError("No connection available")
+
+            # BS205 응답은 10바이트 고정
+            response = await self._connection.read(size=10, timeout=timeout)
+
+            # If first read is incomplete, try one more time
+            if response and len(response) < 10:
+                additional = await self._connection.read(size=10 - len(response), timeout=0.5)
+                if additional:
+                    response += additional
+
+            return response
+
+        except Exception as e:
+            print(f"DEBUG: Error reading LoadCell response: {e}")
+            return b""
 
     def _parse_bs205_response(self, response_bytes: bytes) -> str:
         """Parse BS205 binary response to ASCII string."""
