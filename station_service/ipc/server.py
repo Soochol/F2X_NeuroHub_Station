@@ -132,6 +132,9 @@ class IPCServer:
         # Start router message handler for worker registration and responses
         self._router_task = asyncio.create_task(self._handle_router_messages())
 
+        # Ensure background tasks get a chance to start
+        await asyncio.sleep(0)
+
         logger.info(
             f"IPC Server started - ROUTER: {self.router_address}, SUB: {self.sub_address}"
         )
@@ -411,6 +414,8 @@ class IPCServer:
 
         Processes registration requests and command responses.
         """
+        logger.info("[IPC Server] Router message handler STARTED - listening for worker registrations")
+
         while self._running:
             try:
                 events = await self._router_socket.poll(timeout=100)
@@ -419,7 +424,9 @@ class IPCServer:
 
                 # ROUTER frame format: [identity, empty, message]
                 frames = await self._router_socket.recv_multipart()
+                logger.debug(f"[IPC Server] Received {len(frames)} frames from ROUTER")
                 if len(frames) < 3:
+                    logger.warning(f"[IPC Server] Invalid frame count: {len(frames)}, expected 3+")
                     continue
 
                 identity = frames[0]

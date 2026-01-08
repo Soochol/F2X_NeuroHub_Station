@@ -4,7 +4,7 @@
  * Collapsible sidebar with grouped menu items and station info
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -13,7 +13,6 @@ import {
   Wrench,
   FileText,
   Settings,
-  Search,
   PanelLeft,
   PanelLeftClose,
   Activity,
@@ -69,7 +68,6 @@ interface SidebarProps {
 
 export function Sidebar({ isCollapsed, onToggle, stationId, stationName }: SidebarProps) {
   const location = useLocation();
-  const [searchQuery, setSearchQuery] = useState('');
   const websocketStatus = useConnectionStore((state) => state.websocketStatus);
 
   // Save collapsed state to localStorage
@@ -155,7 +153,6 @@ export function Sidebar({ isCollapsed, onToggle, stationId, stationName }: Sideb
       {/* Logo and Toggle */}
       <div
         className="flex items-center justify-between p-4 min-h-[64px]"
-        style={{ borderBottom: '1px solid var(--color-border-default)' }}
       >
         <div className="flex items-center gap-3">
           {/* Logo Icon */}
@@ -193,41 +190,6 @@ export function Sidebar({ isCollapsed, onToggle, stationId, stationName }: Sideb
           {isCollapsed ? <PanelLeft className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
         </button>
       </div>
-
-      {/* Search Bar */}
-      {!isCollapsed && (
-        <div className="p-4 pb-2">
-          <div
-            className="flex items-center gap-2 rounded-lg px-3 py-2.5"
-            style={{
-              backgroundColor: 'var(--color-bg-tertiary)',
-              border: '1px solid var(--color-border-default)',
-            }}
-          >
-            <Search className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--color-text-tertiary)' }} />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent border-none outline-none flex-1 text-sm"
-              style={{ color: 'var(--color-text-primary)' }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Search Icon Only (Collapsed) */}
-      {isCollapsed && (
-        <div className="py-3 flex justify-center">
-          <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center cursor-pointer transition-colors"
-            style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
-          >
-            <Search className="w-[18px] h-[18px]" style={{ color: 'var(--color-text-tertiary)' }} />
-          </div>
-        </div>
-      )}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2">

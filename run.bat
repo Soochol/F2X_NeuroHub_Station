@@ -1,32 +1,14 @@
 @echo off
 chcp 65001 >nul
 echo ========================================
-echo   F2X Station Service - Update and Run
+echo   F2X Station Service - Hot Reload Mode
 echo   Port: 8080
 echo ========================================
 
 cd /d "%~dp0"
 
 echo.
-echo [1/3] Updating from GitHub...
-if exist ".git" (
-    git rev-parse --is-inside-work-tree >nul 2>&1
-    if %errorlevel% equ 0 (
-        git pull origin main
-        if errorlevel 1 (
-            echo WARNING: git pull failed. Continuing with local version.
-            echo If you want to force an update, please check your internet connection.
-        )
-    ) else (
-        echo WARNING: .git folder found but it is not a valid git repository.
-        echo Skipping update and continuing with local version.
-    )
-) else (
-    echo NOTE: Not a git repository. Skipping update.
-)
-
-echo.
-echo [2/3] Installing dependencies...
+echo [1/2] Setting up environment...
 if not exist ".venv" (
     echo Creating virtual environment...
     python -m venv .venv
@@ -46,8 +28,9 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/3] Starting Station Service...
+echo [2/2] Starting Station Service with Hot Reload...
+echo File changes will auto-reload the server.
 echo Press Ctrl+C to stop
 set STATION_CONFIG=./config/station.yaml
-python -m station_service.main
+uvicorn station_service.main:app --host 0.0.0.0 --port 8080 --reload --reload-dir station_service
 pause

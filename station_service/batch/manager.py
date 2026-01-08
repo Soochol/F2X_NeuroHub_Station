@@ -227,6 +227,11 @@ class BatchManager:
             BatchNotFoundError: If batch ID not in config
             BatchAlreadyRunningError: If batch is already running
         """
+        # Clean up stale worker identity (prevents conflicts on retry)
+        if self._ipc_server.is_worker_connected(batch_id):
+            logger.warning(f"Cleaning up stale worker identity for {batch_id}")
+            self._ipc_server.unregister_worker(batch_id)
+
         # Validate batch exists in config
         logger.debug(f"Starting batch {batch_id}...")
         if batch_id not in self._batch_configs:
@@ -279,6 +284,8 @@ class BatchManager:
             logger.error(f"Batch {batch_id} worker failed to connect within timeout")
             # Use pop for safe deletion as _monitor_loop might have already removed it
             self._batches.pop(batch_id, None)
+            # Clean up any partial worker registration
+            self._ipc_server.unregister_worker(batch_id)
             await batch.stop()
             raise BatchError(f"Batch '{batch_id}' worker failed to initialize within timeout")
 

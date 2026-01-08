@@ -184,21 +184,31 @@ class IPCClient:
             "batch_id": self._batch_id,
         })
 
+        logger.info(f"[IPC Client {self._batch_id}] Sending REGISTER to {self._router_address}")
+
         # Send via DEALER (which acts like REQ to ROUTER)
         await self._dealer_socket.send_multipart([
             b"",
             message.encode("utf-8"),
         ])
 
-        # Wait for acknowledgment
-        frames = await self._dealer_socket.recv_multipart()
-        if len(frames) >= 2:
-            response = json.loads(frames[1].decode("utf-8"))
-            if response.get("status") != "ok":
-                raise IPCError(
-                    f"Registration failed: {response.get('message', 'Unknown error')}",
-                    "REGISTRATION_FAILED",
-                )
+        # Wait for acknowledgment with timeout (5 seconds)
+        logger.info(f"[IPC Client {self._batch_id}] Waiting for ACK...")
+        if await self._dealer_socket.poll(timeout=5000):
+            frames = await self._dealer_socket.recv_multipart()
+            if len(frames) >= 2:
+                response = json.loads(frames[1].decode("utf-8"))
+                if response.get("status") != "ok":
+                    raise IPCError(
+                        f"Registration failed: {response.get('message', 'Unknown error')}",
+                        "REGISTRATION_FAILED",
+                    )
+            logger.info(f"[IPC Client {self._batch_id}] Registration ACK received")
+        else:
+            raise IPCConnectionError(
+                self._router_address,
+                "Registration timeout - server did not respond within 5 seconds"
+            )
 
     async def _unregister(self) -> None:
         """Unregister from master process."""

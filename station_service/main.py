@@ -24,6 +24,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
+# Fix for Windows ZMQ compatibility - MUST be set before any ZMQ imports
+# ProactorEventLoop (Windows default) doesn't support add_reader/add_writer
+# which ZMQ asyncio requires for IPC server
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import yaml
 from fastapi import FastAPI

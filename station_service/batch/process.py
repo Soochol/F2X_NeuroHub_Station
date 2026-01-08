@@ -224,6 +224,11 @@ class BatchProcess:
         import sys
         import logging
 
+        # Fix for Windows ZMQ compatibility
+        # ProactorEventLoop (Windows default) doesn't support add_reader/add_writer
+        # which ZMQ asyncio requires
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
         # Configure logging for subprocess
         logging.basicConfig(
