@@ -241,15 +241,18 @@ class BS205LoadCell(LoadCellService):
 
             cmd_timeout = timeout if timeout is not None else 3.0
 
-            # BS205 binary command: ID + Command (SDK-standard 2-byte format)
+            # Binary format (ID + Command)
             id_byte = 0x30 + self._indicator_id
             cmd_byte = ord(command)
-            command_bytes = bytes([id_byte, cmd_byte])
+            binary_cmd = bytes([id_byte, cmd_byte])
 
-            logger.debug(f"Sending BS205 command: {command_bytes.hex().upper()} (ID={self._indicator_id}, CMD={command})")
-            await self._connection.write(command_bytes)
+            # ASCII format (Command + \r)
+            ascii_cmd = (command + "\r").encode("ascii")
+
+            # Try Binary first
+            logger.debug(f"Sending BS205 binary command: {binary_cmd.hex().upper()} (ID={self._indicator_id}, CMD={command})")
+            await self._connection.write(binary_cmd)
             self._last_command_time = asyncio.get_event_loop().time()
-
             await asyncio.sleep(0.15)
 
             # Hold, Hold Release, and Zero commands don't return responses
@@ -257,6 +260,14 @@ class BS205LoadCell(LoadCellService):
                 return "OK"
 
             response_buffer = await self._read_response(cmd_timeout)
+
+            # Fallback to ASCII if binary timed out or was empty
+            if not response_buffer:
+                logger.debug(f"Binary command failed, trying ASCII command: {ascii_cmd.hex().upper()}")
+                await self._connection.write(ascii_cmd)
+                self._last_command_time = asyncio.get_event_loop().time() # Update last command time for ASCII attempt
+                await asyncio.sleep(0.15)
+                response_buffer = await self._read_response(cmd_timeout)
 
             if not response_buffer:
                 logger.warning(f"No response received for command {command}")
@@ -300,39 +311,34 @@ class BS205LoadCell(LoadCellService):
             return b""
 
     def _parse_bs205_response(self, response_bytes: bytes) -> str:
-        """Parse BS205 binary response to ASCII string (SDK-standard logic)."""
-        if len(response_bytes) < 10:
+        """Parse BS205 response to ASCII string (supports Binary STX/ETX and pure ASCII)."""
+        if not response_bytes:
             return ""
 
-        # Extract data between STX (0x02) and ETX (0x03)
+        # Pattern 1: Binary Frame [STX (0x02) ... ETX (0x03)]
         stx_pos = response_bytes.find(0x02)
         if stx_pos != -1:
             etx_pos = response_bytes.find(0x03, stx_pos)
-            if etx_pos != -1:
-                data_bytes = response_bytes[stx_pos + 1 : etx_pos]
-            else:
-                data_bytes = response_bytes[stx_pos + 1 :]
+            data_bytes = response_bytes[stx_pos + 1 : etx_pos] if etx_pos != -1 else response_bytes[stx_pos + 1 :]
         else:
+            # Pattern 2: Pure ASCII (Remove non-printable but keep digits/signs)
             data_bytes = response_bytes
 
-        # Convert to ASCII (SDK-standard multi-byte/hex ID handling)
+        # Convert to ASCII and clean up
         ascii_data = ""
-        for byte_val in data_bytes:
+        for byte_val in response_bytes if stx_pos == -1 else data_bytes:
+            # Keep printable ASCII, dots, signs, and digits
             if 0x20 <= byte_val <= 0x7E:
-                # Replace space with underscore for consistency in parsing
+                # Map space to underscore for consistency with existing weight parser
                 ascii_data += "_" if byte_val == 0x20 else chr(byte_val)
-            else:
-                # Handle special IDs (e.g., 10-15) as per SDK
-                if 0x30 <= byte_val <= 0x39:
-                    ascii_data += chr(byte_val)
-                elif byte_val == 0x3A: # ID 10
-                    ascii_data += "10"
-                elif byte_val == 0x3F: # ID 15
-                    ascii_data += "15"
-                else:
-                    ascii_data += f"[{byte_val:02X}]"
+            elif byte_val == 0x3A: # ID 10
+                ascii_data += "10"
+            elif byte_val == 0x3F: # ID 15
+                ascii_data += "15"
+            elif byte_val in [0x0D, 0x0A]:
+                ascii_data += " "
 
-        return ascii_data
+        return ascii_data.strip()
 
     def _parse_bs205_weight(self, response: str) -> float:
         """Parse BS205 weight response (SDK-standard logic)."""
