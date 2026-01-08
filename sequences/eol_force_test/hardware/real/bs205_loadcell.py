@@ -145,6 +145,8 @@ class BS205LoadCell(LoadCellService):
         target_end_time = start_time + (duration_ms / 1000.0)
 
         sample_count = 0
+        error_count = 0
+        last_error = None
         while asyncio.get_event_loop().time() < target_end_time and sample_count < max_samples:
             try:
                 force_value = await self.read_force()
@@ -153,11 +155,17 @@ class BS205LoadCell(LoadCellService):
 
                 if sample_count < max_samples:
                     await asyncio.sleep(min_interval / 1000.0)
-            except Exception:
+            except Exception as e:
+                error_count += 1
+                last_error = e
+                print(f"DEBUG: Force sample failed ({error_count}): {e}")
                 continue
 
         if not samples:
-            raise RuntimeError("No valid force samples collected")
+            error_msg = f"No valid force samples collected (attempts: {sample_count + error_count}, errors: {error_count})"
+            if last_error:
+                error_msg += f", last error: {last_error}"
+            raise RuntimeError(error_msg)
 
         return max(samples, key=abs)
 
