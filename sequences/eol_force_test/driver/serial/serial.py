@@ -111,7 +111,10 @@ class SerialConnection:
                 timeout=timeout,
             )
 
-            logger.info(f"Serial connected to {port} at {baudrate} baud")
+            logger.info(
+                f"Serial connected to {port} at {baudrate} baud "
+                f"({bytesize}{parity[0].upper() if parity else 'N'}{int(stopbits)})"
+            )
             return SerialConnection(reader, writer)
 
         except asyncio.TimeoutError as e:
