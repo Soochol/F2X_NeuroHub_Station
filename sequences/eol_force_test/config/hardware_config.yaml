@@ -14,7 +14,7 @@ loadcell:
   bytesize: 7
   parity: even
   stopbits: 1
-  indicator_id: 1
+  indicator_id: 0
 
 mcu:
   model: mock          # mock | lma

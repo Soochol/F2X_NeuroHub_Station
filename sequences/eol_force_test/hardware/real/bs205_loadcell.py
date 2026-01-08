@@ -280,15 +280,19 @@ class BS205LoadCell(LoadCellService):
             if not self._connection:
                 raise RuntimeError("No connection available")
 
-            # BS205 응답은 10바이트 고정
+            # SDK Standard: Try to read up to 10 bytes (fixed frame size)
             response = await self._connection.read(size=10, timeout=timeout)
 
-            # If first read is incomplete, try one more time
-            if response and len(response) < 10:
-                additional = await self._connection.read(size=10 - len(response), timeout=0.5)
-                if additional:
-                    response += additional
+            # Greedy enhancement: check for any remaining data in short bursts
+            # This helps if the protocol length varies or if there's trailing junk
+            while True:
+                additional = await self._connection.read(size=1024, timeout=0.1)
+                if not additional:
+                    break
+                response += additional
 
+            if response:
+                logger.debug(f"Read {len(response)} bytes from LoadCell")
             return response
 
         except Exception as e:
