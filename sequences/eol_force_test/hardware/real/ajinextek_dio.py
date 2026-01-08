@@ -19,7 +19,8 @@ class AjinextekDIO(DigitalIOService):
 
     def __init__(
         self,
-        module_no: int = 0,
+        input_module_no: int = 0,
+        output_module_no: int = 1,
         input_count: int = 32,
         output_count: int = 32,
     ):
@@ -27,11 +28,13 @@ class AjinextekDIO(DigitalIOService):
         Initialize Ajinextek Digital I/O.
 
         Args:
-            module_no: DIO module number (default: 0)
+            input_module_no: DIO module number for inputs (default: 0)
+            output_module_no: DIO module number for outputs (default: 1)
             input_count: Number of input channels (default: 32)
             output_count: Number of output channels (default: 32)
         """
-        self._module_no = module_no
+        self._input_module_no = input_module_no
+        self._output_module_no = output_module_no
         self._input_count = input_count
         self._output_count = output_count
 
@@ -48,13 +51,14 @@ class AjinextekDIO(DigitalIOService):
             if not self._axl.is_dio_module():
                 raise AXLDIOError("No DIO module found")
 
-            # Get actual input/output counts from module
-            actual_input_count = self._axl.get_input_count(self._module_no)
-            actual_output_count = self._axl.get_output_count(self._module_no)
+            # Get actual input/output counts from respective modules
+            actual_input_count = self._axl.get_input_count(self._input_module_no)
+            actual_output_count = self._axl.get_output_count(self._output_module_no)
 
-            print(f"DEBUG: Selected DIO Module {self._module_no} - Inputs: {actual_input_count}, Outputs: {actual_output_count}")
+            print(f"DEBUG: Input Module {self._input_module_no} - Inputs: {actual_input_count}")
+            print(f"DEBUG: Output Module {self._output_module_no} - Outputs: {actual_output_count}")
 
-            # Scan other modules for debugging purposes
+            # Scan all modules for debugging purposes
             try:
                 module_count = self._axl.get_dio_module_count()
                 print(f"DEBUG: Total DIO Modules detected: {module_count}")
@@ -63,10 +67,6 @@ class AjinextekDIO(DigitalIOService):
                         in_cnt = self._axl.get_input_count(i)
                         out_cnt = self._axl.get_output_count(i)
                         print(f"DEBUG: Module {i} - Inputs: {in_cnt}, Outputs: {out_cnt}")
-                        
-                        # Auto-suggest if we found a module with outputs and current selected has none
-                        if actual_output_count == 0 and out_cnt > 0:
-                            print(f"SUGGESTION: Try changing 'module_no' to {i} in configuration")
                     except Exception:
                         pass
             except Exception as e:
@@ -114,7 +114,7 @@ class AjinextekDIO(DigitalIOService):
         if channel < 0 or channel >= self._input_count:
             raise ValueError(f"Invalid input channel: {channel}")
 
-        return self._axl.read_input_bit(self._module_no, channel)
+        return self._axl.read_input_bit(self._input_module_no, channel)
 
     async def read_all_inputs(self) -> List[bool]:
         """Read all input channels."""
@@ -124,7 +124,7 @@ class AjinextekDIO(DigitalIOService):
         if not self._axl:
             raise RuntimeError("AXL wrapper not initialized")
 
-        return self._axl.batch_read_inputs(self._module_no, 0, self._input_count)
+        return self._axl.batch_read_inputs(self._input_module_no, 0, self._input_count)
 
     async def read_inputs(self, start: int, count: int) -> List[bool]:
         """Read range of input channels."""
@@ -137,7 +137,7 @@ class AjinextekDIO(DigitalIOService):
         if start < 0 or start + count > self._input_count:
             raise ValueError(f"Invalid input range: {start} to {start + count}")
 
-        return self._axl.batch_read_inputs(self._module_no, start, count)
+        return self._axl.batch_read_inputs(self._input_module_no, start, count)
 
     async def write_output(self, channel: int, value: bool) -> None:
         """Write single output channel."""
@@ -150,7 +150,7 @@ class AjinextekDIO(DigitalIOService):
         if channel < 0 or channel >= self._output_count:
             raise ValueError(f"Invalid output channel: {channel}")
 
-        self._axl.write_output_bit(self._module_no, channel, value)
+        self._axl.write_output_bit(self._output_module_no, channel, value)
 
     async def write_outputs(self, start: int, values: List[bool]) -> None:
         """Write multiple output channels."""
@@ -163,7 +163,7 @@ class AjinextekDIO(DigitalIOService):
         if start < 0 or start + len(values) > self._output_count:
             raise ValueError(f"Invalid output range: {start} to {start + len(values)}")
 
-        self._axl.batch_write_outputs(self._module_no, start, values)
+        self._axl.batch_write_outputs(self._output_module_no, start, values)
 
     async def read_output(self, channel: int) -> bool:
         """Read current state of output channel."""
@@ -176,7 +176,7 @@ class AjinextekDIO(DigitalIOService):
         if channel < 0 or channel >= self._output_count:
             raise ValueError(f"Invalid output channel: {channel}")
 
-        return self._axl.read_output_bit(self._module_no, channel)
+        return self._axl.read_output_bit(self._output_module_no, channel)
 
     async def read_all_outputs(self) -> List[bool]:
         """Read all output channel states."""
@@ -186,7 +186,7 @@ class AjinextekDIO(DigitalIOService):
         if not self._axl:
             raise RuntimeError("AXL wrapper not initialized")
 
-        return self._axl.batch_read_outputs(self._module_no, 0, self._output_count)
+        return self._axl.batch_read_outputs(self._output_module_no, 0, self._output_count)
 
     async def set_all_outputs(self, value: bool) -> None:
         """Set all outputs to the same value."""
@@ -197,13 +197,14 @@ class AjinextekDIO(DigitalIOService):
             raise RuntimeError("AXL wrapper not initialized")
 
         values = [value] * self._output_count
-        self._axl.batch_write_outputs(self._module_no, 0, values)
+        self._axl.batch_write_outputs(self._output_module_no, 0, values)
 
     async def get_status(self) -> Dict[str, Any]:
         """Get hardware status."""
         status = {
             "connected": await self.is_connected(),
-            "module_no": self._module_no,
+            "input_module_no": self._input_module_no,
+            "output_module_no": self._output_module_no,
             "input_count": self._input_count,
             "output_count": self._output_count,
             "hardware_type": "Ajinextek DIO",

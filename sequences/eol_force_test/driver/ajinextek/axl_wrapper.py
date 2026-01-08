@@ -348,6 +348,12 @@ class AXLWrapper:
         except AttributeError:
             pass
 
+        try:
+            self.dll.AxmMotLoadParaAll.argtypes = [c_char_p]
+            self.dll.AxmMotLoadParaAll.restype = c_long
+        except AttributeError:
+            pass
+
         # === Digital I/O Functions ===
         self._setup_dio_functions()
 
@@ -982,6 +988,36 @@ class AXLWrapper:
             if self.is_opened():
                 self.close()
             self._connection_count = 0
+
+    def load_motion_parameters(self, file_path: str) -> None:
+        """
+        Load motion parameters from .mot file.
+
+        Args:
+            file_path: Path to the .mot parameter file
+
+        Raises:
+            AXLMotionError: If loading fails
+            FileNotFoundError: If file doesn't exist
+        """
+        if self.dll is None:
+            raise AXLError("DLL not loaded")
+
+        # Check file exists
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Motion parameter file not found: {file_path}")
+
+        # Convert to bytes for ctypes
+        file_path_bytes = str(path.absolute()).encode("utf-8")
+
+        result = self.dll.AxmMotLoadParaAll(file_path_bytes)
+        if result != AXT_RT_SUCCESS:
+            error_msg = get_error_message(result)
+            raise AXLMotionError(
+                f"Failed to load motion parameters: {error_msg}",
+                result
+            )
 
     @classmethod
     def reset_for_testing(cls) -> None:
