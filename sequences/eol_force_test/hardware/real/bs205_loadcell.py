@@ -264,7 +264,7 @@ class BS205LoadCell(LoadCellService):
                 if mode == "binary" or mode is None:
                     target_id = self._detected_id if self._detected_id is not None else self._indicator_id
                     id_byte = 0x30 + target_id
-                    binary_cmd = bytes([id_byte, ord(command)])
+                    binary_cmd = bytes([id_byte, ord(command), 0x0D, 0x0A])
                     logger.debug(f"Sending BS205 binary command: {binary_cmd.hex().upper()} (ID={target_id})")
                     await self._connection.write(binary_cmd)
                 else:
