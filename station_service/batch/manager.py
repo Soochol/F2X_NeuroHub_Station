@@ -384,9 +384,20 @@ class BatchManager:
 
         Raises:
             BatchNotRunningError: If batch is not running
+            BatchError: If worker fails to connect within timeout
         """
         if batch_id not in self._batches:
             raise BatchNotRunningError(batch_id)
+
+        # Wait for worker to connect if not yet connected (handles race condition)
+        if not self._ipc_server.is_worker_connected(batch_id):
+            try:
+                await self._ipc_server.wait_for_worker(batch_id, timeout=5.0)
+            except IPCTimeoutError:
+                raise BatchError(
+                    f"Worker for batch '{batch_id}' is not ready. "
+                    "The batch is starting up, please retry in a few seconds."
+                )
 
         response = await self._ipc_server.send_command(
             batch_id,
