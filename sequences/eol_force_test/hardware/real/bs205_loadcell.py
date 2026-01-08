@@ -79,6 +79,10 @@ class BS205LoadCell(LoadCellService):
         self._connection: Optional[SerialConnection] = None
         self._is_connected = False
 
+        self._detected_mode: Optional[str] = None  # 'stream', 'binary', 'ascii'
+        self._detected_id: Optional[int] = None
+        self._probe_lock = asyncio.Lock()
+
         self._last_command_time = 0.0
         self._min_command_interval = 0.2
         self._command_lock = asyncio.Lock()
@@ -222,59 +226,110 @@ class BS205LoadCell(LoadCellService):
     async def _send_bs205_command(
         self, command: str, timeout: Optional[float] = None
     ) -> Optional[str]:
-        """Send BS205 binary protocol command."""
+        """Send BS205 protocol command with auto-probing support."""
         if not self._connection:
             raise RuntimeError("No connection available")
 
         async with self._command_lock:
-            # Flush input buffer before sending command to avoid stale data (SDK-standard enhancement)
-            try:
-                await self._connection.flush_input_buffer()
-            except Exception as e:
-                logger.warning(f"Failed to flush input buffer: {e}")
+            # Auto-probe if mode not yet detected
+            if self._detected_mode is None:
+                await self._probe_hardware()
+
+            # If Stream Mode, we don't send commands for reading weight
+            if self._detected_mode == "stream" and command == CMD_READ_WEIGHT:
+                response_buffer = await self._read_response(timeout or 2.0)
+                if response_buffer:
+                    return self._parse_bs205_response(response_buffer)
+                return None
 
             current_time = asyncio.get_event_loop().time()
             time_since_last = current_time - self._last_command_time
-
             if time_since_last < self._min_command_interval:
                 await asyncio.sleep(self._min_command_interval - time_since_last)
 
             cmd_timeout = timeout if timeout is not None else 3.0
 
-            # Binary format (ID + Command)
-            id_byte = 0x30 + self._indicator_id
-            cmd_byte = ord(command)
-            binary_cmd = bytes([id_byte, cmd_byte])
-
-            # ASCII format (Command + \r)
-            ascii_cmd = (command + "\r").encode("ascii")
-
-            # Try Binary first
-            logger.debug(f"Sending BS205 binary command: {binary_cmd.hex().upper()} (ID={self._indicator_id}, CMD={command})")
-            await self._connection.write(binary_cmd)
-            self._last_command_time = asyncio.get_event_loop().time()
-            await asyncio.sleep(0.15)
-
-            # Hold, Hold Release, and Zero commands don't return responses
-            if command in [CMD_HOLD, CMD_HOLD_RELEASE, CMD_ZERO]:
-                return "OK"
-
-            response_buffer = await self._read_response(cmd_timeout)
-
-            # Fallback to ASCII if binary timed out or was empty
-            if not response_buffer:
-                logger.debug(f"Binary command failed, trying ASCII command: {ascii_cmd.hex().upper()}")
-                await self._connection.write(ascii_cmd)
-                self._last_command_time = asyncio.get_event_loop().time() # Update last command time for ASCII attempt
-                await asyncio.sleep(0.15)
-                response_buffer = await self._read_response(cmd_timeout)
-
-            if not response_buffer:
-                logger.warning(f"No response received for command {command}")
-                raise BS205CommunicationError(f"No response received for command {command}")
+            # Use detected mode or try both if still unknown
+            modes_to_try = [self._detected_mode] if self._detected_mode else ["binary", "ascii"]
             
-            logger.debug(f"Received BS205 response: {response_buffer.hex().upper()}")
-            return self._parse_bs205_response(response_buffer)
+            for mode in modes_to_try:
+                if mode == "binary" or mode is None:
+                    target_id = self._detected_id if self._detected_id is not None else self._indicator_id
+                    id_byte = 0x30 + target_id
+                    binary_cmd = bytes([id_byte, ord(command)])
+                    logger.debug(f"Sending BS205 binary command: {binary_cmd.hex().upper()} (ID={target_id})")
+                    await self._connection.write(binary_cmd)
+                else:
+                    ascii_cmd = (command + "\r").encode("ascii")
+                    logger.debug(f"Sending BS205 ascii command: {ascii_cmd.hex().upper()}")
+                    await self._connection.write(ascii_cmd)
+
+                self._last_command_time = asyncio.get_event_loop().time()
+                await asyncio.sleep(0.15)
+
+                if command in [CMD_HOLD, CMD_HOLD_RELEASE, CMD_ZERO]:
+                    return "OK"
+
+                response_buffer = await self._read_response(cmd_timeout)
+                if response_buffer:
+                    if self._detected_mode is None:
+                        self._detected_mode = mode
+                        if mode == "binary":
+                            self._detected_id = target_id
+                        logger.info(f"Detected LoadCell mode: {mode} (ID={self._detected_id})")
+                    
+                    logger.debug(f"Received BS205 response: {response_buffer.hex().upper()}")
+                    return self._parse_bs205_response(response_buffer)
+
+            logger.warning(f"No response received for command {command}")
+            return None
+
+    async def _probe_hardware(self):
+        """Probe for Stream Mode or correct ID/Protocol."""
+        async with self._probe_lock:
+            if self._detected_mode is not None:
+                return
+
+            logger.info("Probing LoadCell communication...")
+
+            # Phase 1: Passive Read (Stream Mode Check)
+            # SDK-standard enhancement: Don't flush yet, see if data is already coming
+            passive_data = await self._read_response(timeout=1.0)
+            if passive_data:
+                logger.info(f"Stream Mode detected! Received {len(passive_data)} bytes passively.")
+                self._detected_mode = "stream"
+                return
+
+            # Phase 2: ID Scan (Common IDs: 0, 1, 2, 10, 15)
+            # Reverting flush here only if passive fails
+            try:
+                await self._connection.flush_input_buffer()
+            except: pass
+
+            for tid in [0, 1, 2, 10, 15]:
+                id_byte = 0x30 + tid
+                binary_cmd = bytes([id_byte, ord(CMD_READ_WEIGHT)])
+                logger.debug(f"Probing Binary ID={tid}...")
+                await self._connection.write(binary_cmd)
+                await asyncio.sleep(0.3)
+                resp = await self._read_response(timeout=1.0)
+                if resp:
+                    logger.info(f"Found working Binary ID: {tid}")
+                    self._detected_mode = "binary"
+                    self._detected_id = tid
+                    return
+
+            # Phase 3: ASCII Fallback
+            logger.debug("Probing ASCII R\\r...")
+            await self._connection.write(b"R\r")
+            await asyncio.sleep(0.3)
+            resp = await self._read_response(timeout=1.0)
+            if resp:
+                logger.info("Found working ASCII mode")
+                self._detected_mode = "ascii"
+                return
+
+            logger.warning("All LoadCell probes failed. Check physical connection/settings.")
 
     async def _read_response(self, timeout: float) -> bytes:
         """Read BS205 response with retry for incomplete reads.
