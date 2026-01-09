@@ -50,7 +50,7 @@ function TabButton({ label, icon, isActive, onClick }: TabButtonProps) {
 }
 
 export function DebugLogPanel({ batchId, steps, isRunning = false, onPendingChangesChange }: DebugLogPanelProps) {
-  const { activeTab, setActiveTab, selectedStep, logLevel, searchQuery } = useDebugPanelStore();
+  const { activeTab, setActiveTab, selectedStep, logLevel, searchQuery, autoScroll, setAutoScroll } = useDebugPanelStore();
   const logs = useLogStore((s) => s.logs);
   const clearLogs = useLogStore((s) => s.clearLogs);
 
@@ -77,6 +77,11 @@ export function DebugLogPanel({ batchId, steps, isRunning = false, onPendingChan
   const handleParamsDirtyChange = useCallback((isDirty: boolean) => {
     setParamsDirty(isDirty);
   }, []);
+
+  // Toggle auto-scroll
+  const handleToggleAutoScroll = useCallback(() => {
+    setAutoScroll(!autoScroll);
+  }, [autoScroll, setAutoScroll]);
 
   // Get unique step names for filter dropdown
   const stepNames = useMemo(() => {
@@ -242,7 +247,13 @@ export function DebugLogPanel({ batchId, steps, isRunning = false, onPendingChan
       </div>
 
       {/* Filters (only for logs tab) */}
-      {activeTab === 'logs' && <LogFilters stepNames={stepNames} />}
+      {activeTab === 'logs' && (
+        <LogFilters
+          stepNames={stepNames}
+          autoScroll={autoScroll}
+          onToggleAutoScroll={handleToggleAutoScroll}
+        />
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">

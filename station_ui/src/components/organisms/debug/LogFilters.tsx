@@ -1,16 +1,22 @@
 /**
  * LogFilters - Filter controls for debug log panel.
+ * Matches LogsPage filter section design.
  */
 
-import { Search, X } from 'lucide-react';
+import { Filter, Pause, Play } from 'lucide-react';
 import { useDebugPanelStore } from '../../../stores/debugPanelStore';
 import { Select } from '../../atoms/Select';
 import { Input } from '../../atoms/Input';
+import { Button } from '../../atoms/Button';
 import type { LogLevel } from '../../../types';
 
 interface LogFiltersProps {
   /** Available step names for filtering */
   stepNames: string[];
+  /** Whether auto-scroll is enabled */
+  autoScroll: boolean;
+  /** Callback to toggle auto-scroll */
+  onToggleAutoScroll: () => void;
 }
 
 const levelOptions = [
@@ -21,8 +27,8 @@ const levelOptions = [
   { value: 'error', label: 'Error' },
 ];
 
-export function LogFilters({ stepNames }: LogFiltersProps) {
-  const { selectedStep, logLevel, searchQuery, setSelectedStep, setLogLevel, setSearchQuery, clearFilters } =
+export function LogFilters({ stepNames, autoScroll, onToggleAutoScroll }: LogFiltersProps) {
+  const { selectedStep, logLevel, searchQuery, setSelectedStep, setLogLevel, setSearchQuery } =
     useDebugPanelStore();
 
   const stepOptions = [
@@ -30,53 +36,55 @@ export function LogFilters({ stepNames }: LogFiltersProps) {
     ...stepNames.map((name) => ({ value: name, label: name })),
   ];
 
-  const hasActiveFilters = selectedStep || logLevel || searchQuery;
-
   return (
     <div
-      className="flex flex-col gap-2 px-3 py-2 border-b"
-      style={{ borderColor: 'var(--color-border-default)' }}
+      className="p-3 rounded-lg border m-2"
+      style={{
+        backgroundColor: 'var(--color-bg-secondary)',
+        borderColor: 'var(--color-border-default)',
+      }}
     >
-      {/* Step and Level filters */}
-      <div className="flex items-center gap-2">
+      {/* Filters label */}
+      <div className="flex items-center gap-2 mb-3">
+        <Filter className="w-4 h-4" style={{ color: 'var(--color-text-secondary)' }} />
+        <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+          Filters
+        </span>
+      </div>
+
+      {/* Grid layout: Step / Level / Search / Auto-scroll button */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
         <Select
           value={selectedStep || ''}
           onChange={(e) => setSelectedStep(e.target.value || null)}
-          className="flex-1 text-xs"
+          className="text-xs"
           placeholder="All Steps"
           options={stepOptions}
         />
         <Select
           value={logLevel || ''}
           onChange={(e) => setLogLevel((e.target.value as LogLevel) || null)}
-          className="flex-1 text-xs"
+          className="text-xs"
           placeholder="All Levels"
           options={levelOptions}
-        />
-      </div>
-
-      {/* Search input */}
-      <div className="relative">
-        <Search
-          className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-          style={{ color: 'var(--color-text-tertiary)' }}
         />
         <Input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search logs..."
-          className="pl-7 pr-7 text-xs w-full"
+          className="text-xs"
         />
-        {hasActiveFilters && (
-          <button
-            onClick={clearFilters}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-zinc-700"
-            title="Clear filters"
+        <div className="flex items-center justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleAutoScroll}
+            title={autoScroll ? 'Pause auto-scroll' : 'Resume auto-scroll'}
           >
-            <X className="w-3.5 h-3.5" style={{ color: 'var(--color-text-tertiary)' }} />
-          </button>
-        )}
+            {autoScroll ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+          </Button>
+        </div>
       </div>
     </div>
   );
