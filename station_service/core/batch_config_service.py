@@ -53,6 +53,8 @@ class BatchConfigService:
         await service.delete_batch("batch_id")
     """
 
+    MAX_SLOTS = 12  # Maximum number of batch slots per station
+
     def __init__(
         self,
         batch_manager: "BatchManager",
@@ -68,6 +70,35 @@ class BatchConfigService:
         self._batch_manager = batch_manager
         self._repository = config_repository
         self._operation_lock = asyncio.Lock()
+
+    def _get_used_slots(self) -> set[int]:
+        """Get set of slot IDs currently in use by batches."""
+        used_slots = set()
+        for batch_id in self._batch_manager.batch_ids:
+            config = self._batch_manager.get_batch_config(batch_id)
+            if config:
+                slot_id = config.config.get("slotId")
+                if slot_id and isinstance(slot_id, int):
+                    used_slots.add(slot_id)
+        return used_slots
+
+    def _allocate_slot(self) -> Optional[int]:
+        """
+        Allocate the lowest available slot ID (1-12).
+
+        Returns:
+            Slot ID if available, None if all slots are occupied
+        """
+        used_slots = self._get_used_slots()
+        for slot in range(1, self.MAX_SLOTS + 1):
+            if slot not in used_slots:
+                return slot
+        return None
+
+    def get_available_slots(self) -> list[int]:
+        """Get list of available slot IDs."""
+        used_slots = self._get_used_slots()
+        return [slot for slot in range(1, self.MAX_SLOTS + 1) if slot not in used_slots]
 
     async def create_batch(self, config: BatchConfig) -> BatchConfig:
         """
@@ -94,7 +125,19 @@ class BatchConfigService:
             # 1. Validate
             self._validate_for_create(config)
 
-            # 2. Persist to YAML first (Source of Truth)
+            # 2. Allocate slot_id if not provided
+            if not config.config.get("slotId"):
+                slot_id = self._allocate_slot()
+                if slot_id is None:
+                    raise BatchValidationError(
+                        config.id,
+                        f"All {self.MAX_SLOTS} batch slots are occupied. "
+                        f"Delete an existing batch to free up a slot.",
+                    )
+                config.config["slotId"] = slot_id
+                logger.info(f"Auto-assigned slot_id={slot_id} to batch '{config.id}'")
+
+            # 3. Persist to YAML first (Source of Truth)
             batch_dict = self._to_yaml_dict(config)
             try:
                 await self._repository.create(batch_dict)

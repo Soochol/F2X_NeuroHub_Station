@@ -96,6 +96,7 @@ async def list_batches(
                 id=status_data.get("id", ""),
                 name=status_data.get("name", ""),
                 status=status_data.get("status", "idle"),
+                slot_id=status_data.get("slot_id"),
                 sequence_name=status_data.get("sequence_name", ""),
                 sequence_version=status_data.get("sequence_version", ""),
                 current_step=status_data.get("current_step"),
@@ -546,10 +547,10 @@ async def start_sequence(
         if process_id:
             parameters["process_id"] = process_id
 
-        # Add header_id from batch config for backend integration
-        header_id = batch_config.get_header_id() if batch_config else None
-        if header_id:
-            parameters["header_id"] = header_id
+        # Add slot_id from batch config for backend integration (UI ordering)
+        slot_id = batch_config.config.get("slotId") if batch_config else None
+        if slot_id:
+            parameters["slot_id"] = slot_id
 
         # Add pre-validated wip_int_id to skip lookup in worker
         if request and request.wip_int_id:

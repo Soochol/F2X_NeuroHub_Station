@@ -129,6 +129,12 @@ class ProcessHeaderOpenRequest(BaseModel):
     station_id: str = Field(..., description="Station identifier")
     batch_id: str = Field(..., description="Batch identifier")
     process_id: int = Field(..., description="Process ID (foreign key)")
+    slot_id: Optional[int] = Field(
+        None,
+        ge=1,
+        le=12,
+        description="Slot ID for UI display order (1-12, auto-assigned if not provided)",
+    )
     sequence_package: Optional[str] = Field(None, description="Sequence package name")
     sequence_version: Optional[str] = Field(None, description="Sequence version")
     parameters: Dict[str, Any] = Field(
@@ -157,6 +163,7 @@ class ProcessHeaderSummary(BaseModel):
     id: int = Field(..., description="Header ID")
     station_id: str = Field(..., description="Station identifier")
     batch_id: str = Field(..., description="Batch identifier")
+    slot_id: Optional[int] = Field(None, description="Slot ID for UI display order (1-12)")
     process_id: int = Field(..., description="Process ID")
     status: str = Field(..., description="Header status: OPEN, CLOSED, CANCELLED")
     total_count: int = Field(default=0, description="Total WIP items processed")
@@ -177,6 +184,7 @@ class ProcessHeaderSummary(BaseModel):
             id=data["id"],
             station_id=data.get("station_id", data.get("stationId", "")),
             batch_id=data.get("batch_id", data.get("batchId", "")),
+            slot_id=data.get("slot_id", data.get("slotId")),
             process_id=data.get("process_id", data.get("processId", 0)),
             status=data["status"],
             total_count=data.get("total_count", data.get("totalCount", 0)),
@@ -199,6 +207,7 @@ class ProcessHeaderResponse(BaseModel):
     id: int = Field(..., description="Header ID")
     station_id: str = Field(..., description="Station identifier")
     batch_id: str = Field(..., description="Batch identifier")
+    slot_id: Optional[int] = Field(None, description="Slot ID for UI display order (1-12)")
     process_id: int = Field(..., description="Process ID")
     status: str = Field(..., description="Header status: OPEN, CLOSED, CANCELLED")
     opened_at: datetime = Field(..., description="When header was opened")
@@ -218,6 +227,7 @@ class ProcessHeaderResponse(BaseModel):
             id=data["id"],
             station_id=data["station_id"],
             batch_id=data["batch_id"],
+            slot_id=data.get("slot_id"),
             process_id=data["process_id"],
             status=data["status"],
             opened_at=datetime.fromisoformat(data["opened_at"].replace("Z", "+00:00")),

@@ -142,7 +142,7 @@ class BackendMixin:
         process_id: int,
         operator_id: int,
         equipment_id: Optional[int] = None,
-        header_id: Optional[int] = None,
+        slot_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Call Backend start-process API (착공).
@@ -152,7 +152,7 @@ class BackendMixin:
             process_id: Process number
             operator_id: Operator ID
             equipment_id: Optional equipment ID
-            header_id: Optional header ID from batch config
+            slot_id: Optional slot ID (1-12) from batch config for UI ordering
 
         Returns:
             Backend response
@@ -164,7 +164,7 @@ class BackendMixin:
             raise BackendConnectionError("", "Backend client not initialized")
 
         # Ensure process header exists for station/batch tracking
-        header_id = await self._ensure_process_header(process_id, header_id)
+        header_id = await self._ensure_process_header(process_id, slot_id)
 
         request = ProcessStartRequest(
             process_id=process_id,
@@ -226,17 +226,17 @@ class BackendMixin:
     async def _ensure_process_header(
         self: BackendMixinProtocol,
         process_id: int,
-        header_id: Optional[int] = None,
+        slot_id: Optional[int] = None,
     ) -> Optional[int]:
         """
         Ensure a process header exists for this batch session.
 
-        Uses header ID from parameters if specified, otherwise opens a new header
-        or retrieves existing one for station+batch+process.
+        Opens a new header or retrieves existing one for station+batch+process.
+        If slot_id is provided, it will be passed to Backend for slot assignment.
 
         Args:
             process_id: Process ID for the header
-            header_id: Optional header ID from batch config (via start_sequence params)
+            slot_id: Optional slot ID (1-12) from batch config for UI display order
 
         Returns:
             Header ID if successful, None otherwise
@@ -250,21 +250,13 @@ class BackendMixin:
             logger.debug(f"Using existing header: {self._state.backend.current_header_id}")
             return self._state.backend.current_header_id
 
-        # Use header_id from parameters (passed from batch config via start_sequence)
-        if header_id is not None:
-            self._state.backend.current_header_id = header_id
-            logger.info(
-                f"Using header_id from batch config: id={header_id}, "
-                f"batch={self.batch_id}, process={process_id}"
-            )
-            return header_id
-
         try:
-            # Prepare header open request
+            # Prepare header open request with slot_id
             request = ProcessHeaderOpenRequest(
                 station_id=self._state.backend.station_id,
                 batch_id=self.batch_id,
                 process_id=process_id,
+                slot_id=slot_id,  # Pass slot_id to Backend
                 sequence_package=self._state.manifest.get("name") if self._state.manifest else None,
                 sequence_version=self._state.manifest.get("version") if self._state.manifest else None,
                 parameters={},  # Could be expanded
@@ -276,7 +268,7 @@ class BackendMixin:
             self._state.backend.current_header_id = header.id
 
             logger.info(
-                f"Process header opened: id={header.id}, "
+                f"Process header opened: id={header.id}, slot={slot_id}, "
                 f"station={self._state.backend.station_id}, "
                 f"batch={self.batch_id}, process={process_id}"
             )

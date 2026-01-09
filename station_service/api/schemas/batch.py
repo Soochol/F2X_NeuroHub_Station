@@ -107,6 +107,7 @@ class BatchSummary(APIBaseModel):
         id: Unique batch identifier
         name: Display name of the batch
         status: Current status (idle, running, completed, failed)
+        slot_id: Slot ID for UI display order (1-12)
         sequence_name: Name of the assigned sequence
         sequence_version: Version of the assigned sequence
         current_step: Name of the currently executing step
@@ -119,6 +120,7 @@ class BatchSummary(APIBaseModel):
     id: str = Field(..., description="Unique batch identifier")
     name: str = Field(..., description="Display name of the batch")
     status: str = Field(..., description="Current status")
+    slot_id: Optional[int] = Field(None, description="Slot ID for UI display order (1-12)", ge=1, le=12)
     sequence_name: str = Field(..., description="Assigned sequence name")
     sequence_version: str = Field(..., description="Assigned sequence version")
     current_step: Optional[str] = Field(None, description="Currently executing step")

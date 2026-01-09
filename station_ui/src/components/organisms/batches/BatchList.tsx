@@ -3,7 +3,7 @@
  * Enhanced with statistics display for each batch.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { BatchCard } from '../../molecules/BatchCard';
 import { Select } from '../../atoms/Select';
@@ -29,8 +29,16 @@ export function BatchList({ batches, statistics, onStart, onStop, onDelete, onSe
   const batchStatistics = useBatchStore((state) => state.batchStatistics);
   const batchStats = statistics || batchStatistics;
 
-  const filteredBatches =
-    statusFilter === 'all' ? batches : batches.filter((b) => b.status === statusFilter);
+  // Filter by status and sort by slotId (ascending)
+  const filteredBatches = useMemo(() => {
+    const filtered = statusFilter === 'all' ? batches : batches.filter((b) => b.status === statusFilter);
+    // Sort by slotId: batches with slotId come first (ascending), then batches without slotId
+    return [...filtered].sort((a, b) => {
+      const slotA = a.slotId ?? 999;
+      const slotB = b.slotId ?? 999;
+      return slotA - slotB;
+    });
+  }, [batches, statusFilter]);
 
   const statusOptions = [
     { value: 'all', label: 'All Status' },

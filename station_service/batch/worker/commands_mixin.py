@@ -194,7 +194,7 @@ class CommandsMixin:
         process_id = parameters.get("process_id")
         operator_id = parameters.get("operator_id")
         equipment_id = parameters.get("equipment_id")
-        header_id = parameters.get("header_id")  # Header ID from batch config
+        slot_id = parameters.get("slot_id")  # Slot ID (1-12) from batch config for UI ordering
 
         # Generate execution ID
         execution_id = str(uuid.uuid4())[:8]
@@ -226,9 +226,9 @@ class CommandsMixin:
                     process_id=process_id,
                     operator_id=operator_id,
                     equipment_id=equipment_id,
-                    header_id=header_id,
+                    slot_id=slot_id,
                 )
-                logger.info(f"착공 completed: WIP={wip_id_string}, Process={process_id}, Header={header_id}")
+                logger.info(f"착공 completed: WIP={wip_id_string}, Process={process_id}, Slot={slot_id}")
 
             except WIPNotFoundError as e:
                 logger.error(f"WIP not found: {e}")

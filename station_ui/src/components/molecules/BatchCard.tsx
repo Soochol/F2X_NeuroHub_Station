@@ -52,6 +52,15 @@ export function BatchCard({
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
+          {/* Slot Number Badge */}
+          {batch.slotId && (
+            <span
+              className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded bg-brand-500/20 text-brand-400"
+              title={`Slot ${batch.slotId}`}
+            >
+              {batch.slotId}
+            </span>
+          )}
           <h3 className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{batch.name}</h3>
           <StatusBadge status={batch.status} size="sm" />
         </div>

@@ -78,6 +78,8 @@ export interface Batch {
   name: string;
   /** Current status */
   status: BatchStatus;
+  /** Slot ID for UI display order (1-12) */
+  slotId?: number;
   /** Sequence name */
   sequenceName?: string;
   /** Sequence version */

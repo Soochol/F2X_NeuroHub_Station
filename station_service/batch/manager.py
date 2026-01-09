@@ -435,6 +435,7 @@ class BatchManager:
             "id": batch_id,
             "name": config.name,
             "status": BatchStatus.RUNNING.value if is_running else BatchStatus.IDLE.value,
+            "slot_id": config.config.get("slotId") if config.config else None,
             "sequence_package": config.sequence_package,
             "auto_start": config.auto_start,
             "pid": self._batches[batch_id].pid if is_running else None,
