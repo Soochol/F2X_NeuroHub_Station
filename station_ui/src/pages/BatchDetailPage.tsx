@@ -34,6 +34,7 @@ import { ROUTES } from '../constants';
 import { toast } from '../utils/toast';
 import { createLogger } from '../utils';
 import { validateWip } from '../api/endpoints/system';
+import { getBatch as fetchBatchFromApi } from '../api/endpoints/batches';
 import type { Batch, BatchDetail, StepResult } from '../types';
 
 const log = createLogger({ prefix: 'BatchDetailPage' });
@@ -175,10 +176,13 @@ export function BatchDetailPage() {
     let batchWasStarted = false;
 
     try {
-      log.debug('doStartSequence: Starting sequence for batch:', batchId, 'status:', batch.status, 'wipId:', wipId || '(none)');
+      // Fetch fresh batch status from API (cache may be stale after server restart)
+      const freshBatch = await fetchBatchFromApi(batchId);
+      const currentStatus = freshBatch.status;
+      log.debug('doStartSequence: Starting sequence for batch:', batchId, 'status:', currentStatus, '(cached:', batch.status, ')', 'wipId:', wipId || '(none)');
 
       // If batch is idle, start batch first then start sequence
-      if (batch.status === 'idle') {
+      if (currentStatus === 'idle') {
         log.debug('doStartSequence: Starting batch first...');
         await startBatch.mutateAsync(batchId);
         batchWasStarted = true;

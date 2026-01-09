@@ -133,10 +133,16 @@ class CLISequenceWorker:
 
         # Build command
         config_json = json.dumps(config, ensure_ascii=False)
+
+        # Extract package name from potential path (e.g., "sequences/mock_success" -> "mock_success")
+        package_name = self._sequence_name
+        if "/" in package_name:
+            package_name = package_name.split("/")[-1]
+
         cmd = [
             self._python,
             "-m",
-            f"sequences.{self._sequence_name}.main",
+            f"sequences.{package_name}.main",
             "--start",
             "--config",
             config_json,
