@@ -143,24 +143,20 @@ class BatchWorker(BackendMixin, ExecutionMixin, HardwareMixin, CommandsMixin):
             logger.debug("Signal handlers not supported by event loop (skipping)")
 
         try:
-            # Connect to IPC
+            # Phase 1: Connect to IPC (must be first)
             await self._ipc.connect()
             self._ipc.on_command(self.handle_command)
 
-            # Initialize SQLite database for persistent sync queue
-            await self._init_database()
+            # Phase 2: Parallel initialization of independent components
+            await asyncio.gather(
+                self._init_database(),
+                self.init_backend_client(),
+                self.load_sequence(),
+                self.init_barcode_scanner(),
+            )
 
-            # Initialize Backend client if configured
-            await self.init_backend_client()
-
-            # Load sequence package
-            await self.load_sequence()
-
-            # Initialize drivers
+            # Phase 3: Initialize drivers (depends on load_sequence for manifest hardware config)
             await self.initialize_drivers()
-
-            # Initialize barcode scanner if configured
-            await self.init_barcode_scanner()
 
             self._state.phase = WorkerPhase.READY
             logger.info(f"BatchWorker {self._batch_id} ready")

@@ -7,6 +7,7 @@ and termination. Integrates with IPC for communication with worker processes.
 
 import asyncio
 import logging
+import time
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from station_service.core.events import Event, EventEmitter, EventType, get_event_emitter
@@ -227,21 +228,22 @@ class BatchManager:
             BatchNotFoundError: If batch ID not in config
             BatchAlreadyRunningError: If batch is already running
         """
-        # Clean up stale worker identity (prevents conflicts on retry)
-        if self._ipc_server.is_worker_connected(batch_id):
-            logger.warning(f"Cleaning up stale worker identity for {batch_id}")
-            self._ipc_server.unregister_worker(batch_id)
-
         # Validate batch exists in config
         logger.debug(f"Starting batch {batch_id}...")
         if batch_id not in self._batch_configs:
             logger.error(f"Batch startup failed: {batch_id} not in _batch_configs. Available: {list(self._batch_configs.keys())}")
             raise BatchNotFoundError(batch_id)
 
-        # Check if already running
+        # Check if already running (must check BEFORE cleanup to avoid unregistering valid workers)
         if batch_id in self._batches:
             logger.warning(f"Batch {batch_id} is already running")
             raise BatchAlreadyRunningError(batch_id)
+
+        # Clean up stale worker identity (prevents conflicts on retry after failed start)
+        # Only runs if batch is NOT in self._batches (i.e., not running)
+        if self._ipc_server.is_worker_connected(batch_id):
+            logger.warning(f"Cleaning up stale worker identity for {batch_id}")
+            self._ipc_server.unregister_worker(batch_id)
 
         try:
             batch_config = self._batch_configs[batch_id]
@@ -277,11 +279,20 @@ class BatchManager:
         self._batches[batch_id] = batch
 
         # Wait for worker to be ready for commands
+        logger.info(f"[{batch_id}] Waiting for worker to connect...")
+        start_time = time.time()
         try:
             await self._ipc_server.wait_for_worker(batch_id, timeout=10.0)
+            duration = time.time() - start_time
+            logger.info(f"[{batch_id}] Worker connected in {duration:.2f}s")
+
+            # 느린 초기화 경고
+            if duration > 3.0:
+                logger.warning(f"[{batch_id}] Slow worker initialization: {duration:.2f}s")
         except IPCTimeoutError:
             # Cleanup on failure
-            logger.error(f"Batch {batch_id} worker failed to connect within timeout")
+            duration = time.time() - start_time
+            logger.error(f"[{batch_id}] Worker failed to connect after {duration:.2f}s")
             # Use pop for safe deletion as _monitor_loop might have already removed it
             self._batches.pop(batch_id, None)
             # Clean up any partial worker registration
@@ -392,7 +403,7 @@ class BatchManager:
         # Wait for worker to connect if not yet connected (handles race condition)
         if not self._ipc_server.is_worker_connected(batch_id):
             try:
-                await self._ipc_server.wait_for_worker(batch_id, timeout=5.0)
+                await self._ipc_server.wait_for_worker(batch_id, timeout=10.0)
             except IPCTimeoutError:
                 raise BatchError(
                     f"Worker for batch '{batch_id}' is not ready. "
@@ -410,6 +421,31 @@ class BatchManager:
             raise BatchError(response.error or "Unknown error")
 
         return response.data or {}
+
+    async def wait_for_worker(self, batch_id: str, timeout: float = 10.0) -> None:
+        """
+        Wait for a batch worker to be ready.
+
+        Args:
+            batch_id: The batch ID
+            timeout: Maximum time to wait in seconds
+
+        Raises:
+            BatchNotRunningError: If batch is not running
+            BatchError: If worker fails to connect within timeout
+        """
+        if batch_id not in self._batches:
+            raise BatchNotRunningError(batch_id)
+
+        if self._ipc_server.is_worker_connected(batch_id):
+            return  # Already connected
+
+        try:
+            await self._ipc_server.wait_for_worker(batch_id, timeout=timeout)
+        except IPCTimeoutError:
+            raise BatchError(
+                f"Worker for batch '{batch_id}' failed to become ready within {timeout}s"
+            )
 
     async def get_batch_status(self, batch_id: str) -> Dict[str, Any]:
         """
@@ -430,11 +466,20 @@ class BatchManager:
         # Check running status without await
         batch = self._batches.get(batch_id)
         is_running = batch is not None and batch.is_alive
-        
+
+        # Worker 연결 상태 확인하여 starting/running 구분
+        if is_running:
+            if self._ipc_server.is_worker_connected(batch_id):
+                batch_status = BatchStatus.RUNNING.value
+            else:
+                batch_status = BatchStatus.STARTING.value
+        else:
+            batch_status = BatchStatus.IDLE.value
+
         status = {
             "id": batch_id,
             "name": config.name,
-            "status": BatchStatus.RUNNING.value if is_running else BatchStatus.IDLE.value,
+            "status": batch_status,
             "slot_id": config.config.get("slotId") if config.config else None,
             "sequence_package": config.sequence_package,
             "auto_start": config.auto_start,

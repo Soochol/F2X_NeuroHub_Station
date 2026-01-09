@@ -509,6 +509,14 @@ async def start_sequence(
     Start sequence execution on a batch.
     """
     try:
+        # STARTING 상태면 워커가 준비될 때까지 대기 (최대 10초)
+        # race condition 방지: start_batch 직후 sequence/start 호출 시 워커가 아직 연결 안됐을 수 있음
+        batch_status = await batch_manager.get_batch_status(batch_id)
+        if batch_status["status"] == "starting":
+            logger.info(f"Batch {batch_id} is starting, waiting for worker to be ready...")
+            await batch_manager.wait_for_worker(batch_id, timeout=10.0)
+            logger.info(f"Batch {batch_id} worker is now ready")
+
         # Get batch config for parameters and process_id
         batch_config = batch_manager.get_batch_config(batch_id)
 
