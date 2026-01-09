@@ -96,12 +96,6 @@ class StartSequenceCommand(APIBaseModel):
     parameters: Dict[str, Any] = {}
 
 
-class StopSequenceCommand(APIBaseModel):
-    """Command to stop sequence execution."""
-
-    type: Literal["STOP_SEQUENCE"] = "STOP_SEQUENCE"
-
-
 class GetStatusCommand(APIBaseModel):
     """Command to get current status."""
 

@@ -57,6 +57,10 @@ logging.basicConfig(
     ],
 )
 
+# Suppress httpx HTTP client INFO logs to reduce noise
+# Only show warnings and errors (connection issues, timeouts, etc.)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 # Global container instance (replaces individual globals)

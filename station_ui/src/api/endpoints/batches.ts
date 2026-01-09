@@ -208,16 +208,6 @@ export async function startSequence(
 }
 
 /**
- * Stop sequence execution for a batch.
- */
-export async function stopSequence(batchId: string): Promise<{ status: string }> {
-  const response = await apiClient.post<ApiResponse<{ status: string }>>(
-    `/batches/${batchId}/sequence/stop`
-  );
-  return extractData(response);
-}
-
-/**
  * Execute manual hardware control command.
  */
 export async function manualControl(

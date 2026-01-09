@@ -10,7 +10,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Play,
-  Square,
   Clock,
   CheckCircle,
   XCircle,
@@ -19,7 +18,7 @@ import {
   Package,
   Trash2,
 } from 'lucide-react';
-import { useBatch, useBatchStatistics, useStartBatch, useStartSequence, useStopSequence, useStopBatch, useDeleteBatch, useWebSocket, useWorkflowConfig, useSequenceRegistry } from '../hooks';
+import { useBatch, useBatchStatistics, useStartBatch, useStartSequence, useStopBatch, useDeleteBatch, useWebSocket, useWorkflowConfig, useSequenceRegistry } from '../hooks';
 import { useBatchStore } from '../stores/batchStore';
 import { useDebugPanelStore } from '../stores/debugPanelStore';
 import { useLogStore } from '../stores/logStore';
@@ -56,7 +55,6 @@ export function BatchDetailPage() {
 
   const startBatch = useStartBatch();
   const startSequence = useStartSequence();
-  const stopSequence = useStopSequence();
   const stopBatch = useStopBatch();
   const deleteBatch = useDeleteBatch();
 
@@ -273,14 +271,6 @@ export function BatchDetailPage() {
     setWipError(null);
   };
 
-  const handleStopSequence = async () => {
-    if (batchId) {
-      // Stop sequence first, then stop batch
-      await stopSequence.mutateAsync(batchId);
-      await stopBatch.mutateAsync(batchId);
-    }
-  };
-
   const handleDeleteBatch = async () => {
     if (batchId && window.confirm('Are you sure you want to delete this batch?')) {
       await deleteBatch.mutateAsync(batchId);
@@ -309,8 +299,6 @@ export function BatchDetailPage() {
   // Computed values that depend on batch being defined
   // Include 'stopping' in isRunning so stop button remains visible during stop transition
   const isRunning = batch.status === 'running' || batch.status === 'starting' || batch.status === 'stopping';
-  // Disable start during transitions (starting/stopping) for better UX
-  const canStart = batch.status === 'idle' || batch.status === 'completed' || batch.status === 'error';
 
   // Prefer batch.elapsed (from store, updated via WebSocket) over batch.execution.elapsed (from API)
   // Store's elapsed is updated in real-time when sequence_complete is received
@@ -381,6 +369,19 @@ export function BatchDetailPage() {
             <p className="text-sm truncate" style={{ color: 'var(--color-text-tertiary)' }}>ID: {batch.id}</p>
           </div>
           <StatusBadge status={batch.status} />
+          {/* Delete button - relocated from actions area */}
+          {!isRunning && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDeleteBatch}
+              isLoading={deleteBatch.isPending}
+              className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+              title="Delete batch"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
           {/* Inline Statistics */}
           <div className="hidden md:flex items-center gap-4 ml-4 pl-4 border-l" style={{ borderColor: 'var(--color-border-default)' }}>
             <div className="flex items-center gap-1.5 text-sm">
@@ -412,39 +413,36 @@ export function BatchDetailPage() {
           </div>
         </div>
         <div className="flex items-start gap-1 lg:gap-1.5 flex-wrap ml-auto">
-          {canStart && (
-            <Button
-              variant="primary"
-              onClick={handleStartSequence}
-              isLoading={startBatch.isPending || startSequence.isPending}
-              disabled={hasPendingChanges}
-              title={hasPendingChanges ? 'Save changes in Config/Params tabs first' : undefined}
-            >
-              <Play className="w-4 h-4 mr-2" />
-              {hasPendingChanges ? 'Save Changes First' : 'Start Sequence'}
-            </Button>
-          )}
-          {isRunning && (
-            <Button
-              variant="danger"
-              onClick={handleStopSequence}
-              isLoading={stopSequence.isPending || stopBatch.isPending}
-            >
-              <Square className="w-4 h-4 mr-2" />
-              Stop
-            </Button>
-          )}
-          {!isRunning && (
-            <Button
-              variant="ghost"
-              onClick={handleDeleteBatch}
-              isLoading={deleteBatch.isPending}
-              className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </Button>
-          )}
+          <Button
+            variant="primary"
+            onClick={handleStartSequence}
+            isLoading={startBatch.isPending || startSequence.isPending}
+            disabled={hasPendingChanges || isRunning || startBatch.isPending || startSequence.isPending}
+            title={
+              hasPendingChanges
+                ? 'Save changes in Config/Params tabs first'
+                : isRunning
+                  ? 'Sequence is currently running'
+                  : undefined
+            }
+          >
+            {isRunning ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Running...
+              </>
+            ) : hasPendingChanges ? (
+              <>
+                <AlertCircle className="w-4 h-4 mr-2" />
+                Save Changes First
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4 mr-2" />
+                Start Sequence
+              </>
+            )}
+          </Button>
         </div>
       </div>
 

@@ -23,6 +23,27 @@ function isBatchDetail(batch: unknown): batch is BatchDetail {
   return batch !== null && typeof batch === 'object' && 'config' in batch;
 }
 
+// Format config key for display (converts camelCase to Title Case)
+function formatConfigKey(key: string): string {
+  // Special case mappings
+  const specialCases: Record<string, string> = {
+    slotId: 'Slot ID',
+    processId: 'Process ID',
+    headerId: 'Header ID',
+    wipId: 'WIP ID',
+  };
+
+  if (key in specialCases) {
+    return specialCases[key]!;
+  }
+
+  // Convert camelCase to Title Case
+  return key
+    .replace(/([A-Z])/g, ' $1') // Insert space before capital letters
+    .replace(/^./, (str) => str.toUpperCase()) // Capitalize first letter
+    .trim();
+}
+
 export function BatchConfigEditor({ batchId, isRunning, onDirtyChange }: BatchConfigEditorProps) {
   const { data: batch } = useBatch(batchId);
   const { data: workflowConfig } = useWorkflowConfig();
@@ -259,13 +280,13 @@ export function BatchConfigEditor({ batchId, isRunning, onDirtyChange }: BatchCo
                   style={{ color: 'var(--color-text-secondary)' }}
                   title={key}
                 >
-                  {key}
+                  {formatConfigKey(key)}
                 </label>
                 <input
                   type="text"
                   value={String(value ?? '')}
                   onChange={(e) => handleConfigChange(key, e.target.value)}
-                  disabled={isRunning}
+                  disabled={isRunning || key === 'slotId'}
                   className="flex-1 text-xs rounded px-2 py-1 border outline-none transition-colors disabled:opacity-50"
                   style={{
                     backgroundColor: 'var(--color-bg-tertiary)',

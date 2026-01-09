@@ -26,7 +26,6 @@ from station_service.api.schemas.batch import (
     ManualControlResponse,
     SequenceStartRequest,
     SequenceStartResponse,
-    SequenceStopResponse,
     StepResult,
 )
 from station_service.api.schemas.sequence import (
@@ -83,7 +82,6 @@ __all__ = [
     "ManualControlResponse",
     "SequenceStartRequest",
     "SequenceStartResponse",
-    "SequenceStopResponse",
     "StepResult",
     # Sequence schemas
     "HardwareConfigSchema",

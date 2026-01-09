@@ -324,18 +324,6 @@ class TestBatchManager:
 
         await batch_manager.stop()
 
-    @pytest.mark.asyncio
-    async def test_stop_sequence_not_running_raises(
-        self, batch_manager: BatchManager, batch_config: BatchConfig
-    ):
-        """Test that stop_sequence() raises if batch not running."""
-        await batch_manager.start()
-
-        with pytest.raises(BatchNotRunningError):
-            await batch_manager.stop_sequence(batch_config.id)
-
-        await batch_manager.stop()
-
     # ============================================================
     # Restart Tests
     # ============================================================

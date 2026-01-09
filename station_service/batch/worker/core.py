@@ -204,8 +204,8 @@ class BatchWorker(BackendMixin, ExecutionMixin, HardwareMixin, CommandsMixin):
         logger.info("Cleaning up worker resources")
         self._state.phase = WorkerPhase.STOPPING
 
-        # Close process header if open
-        await self.close_process_header(status="CANCELLED")
+        # Close process session if open
+        await self.close_process_session(status="CANCELLED")
 
         # Stop any running CLI execution
         await self.stop_cli_worker()

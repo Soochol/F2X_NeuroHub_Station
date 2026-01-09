@@ -517,19 +517,6 @@ class BatchManager:
         )
         return response.get("execution_id", "")
 
-    async def stop_sequence(self, batch_id: str) -> bool:
-        """
-        Stop sequence execution on a batch.
-
-        Args:
-            batch_id: The batch ID
-
-        Returns:
-            True if sequence was stopped
-        """
-        await self.send_command(batch_id, CommandType.STOP_SEQUENCE)
-        return True
-
     async def manual_control(
         self,
         batch_id: str,

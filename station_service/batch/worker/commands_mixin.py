@@ -1,7 +1,7 @@
 """
 Command handler mixin for BatchWorker.
 
-Handles IPC command processing for START_SEQUENCE, STOP_SEQUENCE,
+Handles IPC command processing for START_SEQUENCE,
 GET_STATUS, MANUAL_CONTROL, and SHUTDOWN commands.
 """
 
@@ -19,7 +19,6 @@ from station_service.models.batch import BatchStatus
 
 from station_service.batch.worker.exceptions import (
     SequenceAlreadyRunningError,
-    SequenceNotRunningError,
     CLIWorkerStartError,
 )
 
@@ -66,7 +65,7 @@ class CommandsMixinProtocol(Protocol):
         equipment_id: Optional[int] = None,
         header_id: Optional[int] = None,
     ) -> Dict[str, Any]: ...
-    async def close_process_header(self, status: str = "CLOSED") -> None: ...
+    async def close_process_session(self, status: str = "CLOSED") -> None: ...
     async def queue_for_offline_sync(
         self,
         entity_type: str,
@@ -95,7 +94,6 @@ class CommandsMixin:
 
     Handles:
     - START_SEQUENCE: Start sequence execution with WIP context
-    - STOP_SEQUENCE: Stop running sequence
     - GET_STATUS: Return current worker status
     - MANUAL_CONTROL: Execute manual hardware commands
     - SHUTDOWN: Graceful shutdown
@@ -121,9 +119,6 @@ class CommandsMixin:
             if command.type == CommandType.START_SEQUENCE:
                 return await self._cmd_start_sequence(command)
 
-            elif command.type == CommandType.STOP_SEQUENCE:
-                return await self._cmd_stop_sequence(command)
-
             elif command.type == CommandType.GET_STATUS:
                 return await self._cmd_get_status(command)
 
@@ -144,10 +139,6 @@ class CommandsMixin:
 
         except SequenceAlreadyRunningError as e:
             logger.warning(f"Sequence already running: {e}")
-            return IPCResponse.error(command.request_id, str(e))
-
-        except SequenceNotRunningError as e:
-            logger.warning(f"Sequence not running: {e}")
             return IPCResponse.error(command.request_id, str(e))
 
         except CLIWorkerStartError as e:
@@ -305,28 +296,6 @@ class CommandsMixin:
             "process_id": process_id,
             "backend_online": self._state.backend.is_online,
         })
-
-    async def _cmd_stop_sequence(
-        self: CommandsMixinProtocol,
-        command: IPCCommand,
-    ) -> IPCResponse:
-        """Handle STOP_SEQUENCE command."""
-        await self.stop_cli_worker()
-
-        if self._execution_task:
-            self._execution_task.cancel()
-            try:
-                await self._execution_task
-            except asyncio.CancelledError:
-                pass
-            self._execution_task = None
-
-        # Close process header with CANCELLED status since sequence was stopped
-        await self.close_process_header(status="CANCELLED")
-
-        self._state.cancel_execution()
-
-        return IPCResponse.ok(command.request_id, {"status": "stopped"})
 
     async def _cmd_get_status(
         self: CommandsMixinProtocol,

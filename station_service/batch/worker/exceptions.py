@@ -83,18 +83,6 @@ class SequenceAlreadyRunningError(CommandError):
         self.code = "SEQUENCE_ALREADY_RUNNING"
 
 
-class SequenceNotRunningError(CommandError):
-    """Exception when trying to stop a sequence that is not running."""
-
-    def __init__(self, batch_id: str) -> None:
-        super().__init__(
-            message="Sequence is not running",
-            command_type="STOP_SEQUENCE",
-            batch_id=batch_id,
-        )
-        self.code = "SEQUENCE_NOT_RUNNING"
-
-
 class ExecutionError(WorkerError):
     """Exception for sequence execution errors."""
 

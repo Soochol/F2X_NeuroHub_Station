@@ -178,11 +178,11 @@ class BackendState:
 
     is_online: bool = False
     station_id: Optional[str] = None
-    current_header_id: Optional[int] = None
+    current_session_id: Optional[int] = None
 
-    def reset_header(self) -> None:
-        """Reset process header state."""
-        self.current_header_id = None
+    def reset_session(self) -> None:
+        """Reset process session state."""
+        self.current_session_id = None
 
 
 @dataclass

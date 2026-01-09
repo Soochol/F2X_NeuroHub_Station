@@ -218,17 +218,6 @@ class SequenceStartResponse(APIBaseModel):
     status: str = Field(..., description="New status")
 
 
-class SequenceStopResponse(APIBaseModel):
-    """Response for sequence stop action.
-
-    Attributes:
-        batch_id: ID of the batch
-        status: New status ('stopped')
-    """
-    batch_id: str = Field(..., description="Batch identifier")
-    status: str = Field(..., description="New status")
-
-
 class ManualControlRequest(APIBaseModel):
     """Request body for manual hardware control.
 

@@ -43,6 +43,8 @@ class BackendMixinProtocol(Protocol):
     @property
     def batch_id(self) -> str: ...
 
+    def _get_manifest_field(self, field_name: str) -> Optional[str]: ...
+
 
 class BackendMixin:
     """
@@ -163,12 +165,12 @@ class BackendMixin:
         if not self._backend_client:
             raise BackendConnectionError("", "Backend client not initialized")
 
-        # Ensure process header exists for station/batch tracking
-        header_id = await self._ensure_process_header(process_id, slot_id)
+        # Ensure process session exists for station/batch tracking
+        session_id = await self._ensure_process_session(process_id, slot_id)
 
         request = ProcessStartRequest(
             process_id=process_id,
-            header_id=header_id,
+            process_session_id=session_id,
             operator_id=operator_id,
             equipment_id=equipment_id,
             started_at=datetime.now(timezone.utc),
@@ -211,7 +213,7 @@ class BackendMixin:
 
         request = ProcessCompleteRequest(
             result=result,
-            header_id=self._state.backend.current_header_id,
+            process_session_id=self._state.backend.current_session_id,
             measurements=measurements,
             defects=defects,
             notes=notes,
@@ -223,93 +225,109 @@ class BackendMixin:
             wip_int_id, process_id, operator_id, request
         )
 
-    async def _ensure_process_header(
+    def _get_manifest_field(self: BackendMixinProtocol, field_name: str) -> Optional[str]:
+        """
+        Extract string field from manifest with proper typing.
+
+        Args:
+            field_name: The field name to extract from manifest
+
+        Returns:
+            String value if found, None otherwise
+        """
+        if not self._state.manifest:
+            return None
+        value = self._state.manifest.get(field_name)
+        return str(value) if value is not None else None
+
+    async def _ensure_process_session(
         self: BackendMixinProtocol,
         process_id: int,
         slot_id: Optional[int] = None,
     ) -> Optional[int]:
         """
-        Ensure a process header exists for this batch session.
+        Ensure a process session exists for this batch execution.
 
-        Opens a new header or retrieves existing one for station+batch+process.
+        Opens a new session or retrieves existing one for station+batch+process.
         If slot_id is provided, it will be passed to Backend for slot assignment.
 
         Args:
-            process_id: Process ID for the header
+            process_id: Process ID for the session
             slot_id: Optional slot ID (1-12) from batch config for UI display order
 
         Returns:
-            Header ID if successful, None otherwise
+            Session ID if successful, None otherwise
         """
         if not self._backend_client or not self._state.backend.station_id:
-            logger.debug("Backend client or station_id not available, skipping header")
+            logger.debug("Backend client or station_id not available, skipping session")
             return None
 
-        # If we already have a header for this process, return it
-        if self._state.backend.current_header_id is not None:
-            logger.debug(f"Using existing header: {self._state.backend.current_header_id}")
-            return self._state.backend.current_header_id
+        # If we already have a session for this process, return it
+        if self._state.backend.current_session_id is not None:
+            logger.debug(f"Using existing session: {self._state.backend.current_session_id}")
+            return self._state.backend.current_session_id
 
         try:
-            # Prepare header open request with slot_id
+            # Prepare session open request with slot_id
             request = ProcessHeaderOpenRequest(
                 station_id=self._state.backend.station_id,
                 batch_id=self.batch_id,
                 process_id=process_id,
                 slot_id=slot_id,  # Pass slot_id to Backend
-                sequence_package=self._state.manifest.get("name") if self._state.manifest else None,
-                sequence_version=self._state.manifest.get("version") if self._state.manifest else None,
+                sequence_package=self._get_manifest_field("name"),
+                sequence_version=self._get_manifest_field("version"),
                 parameters={},  # Could be expanded
                 hardware_config={},  # Could be expanded
             )
 
-            # Open or get existing header
-            header = await self._backend_client.open_header(request)
-            self._state.backend.current_header_id = header.id
+            # Open or get existing session
+            session = await self._backend_client.open_session(request)
+            self._state.backend.current_session_id = session.id
 
             logger.info(
-                f"Process header opened: id={header.id}, slot={slot_id}, "
+                f"Process session opened: "
+                f"session_id={session.id}, slot={slot_id}, "
                 f"station={self._state.backend.station_id}, "
                 f"batch={self.batch_id}, process={process_id}"
             )
 
-            return self._state.backend.current_header_id
+            return self._state.backend.current_session_id
 
         except BackendError as e:
-            logger.warning(f"Failed to open process header: {e}")
+            logger.warning(f"Failed to open process session: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error opening process header: {e}")
+            logger.error(f"Unexpected error opening process session: {e}")
             return None
 
-    async def close_process_header(
+    async def close_process_session(
         self: BackendMixinProtocol,
         status: str = "CLOSED",
     ) -> None:
         """
-        Close the current process header when batch completes.
+        Close the current process session when batch completes.
 
         Args:
             status: Final status (CLOSED or CANCELLED)
         """
-        if not self._backend_client or not self._state.backend.current_header_id:
+        if not self._backend_client or not self._state.backend.current_session_id:
             return
 
         try:
-            header = await self._backend_client.close_header(
-                header_id=self._state.backend.current_header_id,
+            session = await self._backend_client.close_session(
+                session_id=self._state.backend.current_session_id,
                 status=status,
             )
             logger.info(
-                f"Process header closed: id={header.id}, status={status}, "
-                f"total={header.total_count}, pass={header.pass_count}, fail={header.fail_count}"
+                f"Process session closed: id={session.id}, status={status}, "
+                f"total={session.total_count}, pass={session.pass_count}, fail={session.fail_count}"
             )
         except BackendError as e:
-            logger.warning(f"Failed to close process header: {e}")
+            logger.warning(f"Failed to close process session: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error closing process header: {e}")
+            logger.error(f"Unexpected error closing process session: {e}")
         finally:
-            self._state.backend.reset_header()
+            self._state.backend.reset_session()
 
     async def queue_for_offline_sync(
         self: BackendMixinProtocol,

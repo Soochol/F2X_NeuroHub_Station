@@ -34,7 +34,6 @@ from station_service.api.schemas.batch import (
     ManualControlResponse,
     SequenceStartRequest,
     SequenceStartResponse,
-    SequenceStopResponse,
     StepResult,
 )
 from station_service.api.schemas.responses import ApiResponse, ErrorResponse
@@ -581,55 +580,6 @@ async def start_sequence(
         raise
     except Exception as e:
         logger.exception(f"Error starting sequence on batch {batch_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
-        )
-
-
-@router.post(
-    "/{batch_id}/sequence/stop",
-    response_model=ApiResponse[SequenceStopResponse],
-    responses={
-        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
-        status.HTTP_409_CONFLICT: {"model": ErrorResponse},
-        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse},
-    },
-    summary="Stop sequence execution",
-    description="""
-    Stop the currently running sequence execution on a batch.
-
-    This interrupts the sequence execution:
-    - Completes the current step if possible
-    - Runs cleanup steps if defined
-    - Records the execution result as 'stopped'
-    """,
-)
-async def stop_sequence(
-    batch_id: str = Path(..., description="Unique batch identifier"),
-    batch_manager: BatchManager = Depends(get_batch_manager),
-) -> ApiResponse[SequenceStopResponse]:
-    """
-    Stop sequence execution on a batch.
-    """
-    try:
-        await batch_manager.stop_sequence(batch_id)
-
-        return ApiResponse(
-            success=True,
-            data=SequenceStopResponse(
-                batch_id=batch_id,
-                status="stopped",
-            ),
-        )
-
-    except BatchNotRunningError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Batch '{batch_id}' is not running",
-        )
-    except Exception as e:
-        logger.exception(f"Error stopping sequence on batch {batch_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),

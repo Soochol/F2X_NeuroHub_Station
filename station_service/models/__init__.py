@@ -34,7 +34,6 @@ from station_service.models.messages import (
     ErrorMessage,
     # IPC Commands
     StartSequenceCommand,
-    StopSequenceCommand,
     GetStatusCommand,
     ManualControlCommand,
     ShutdownCommand,
@@ -106,7 +105,6 @@ __all__ = [
     "ErrorMessage",
     # IPC Commands
     "StartSequenceCommand",
-    "StopSequenceCommand",
     "GetStatusCommand",
     "ManualControlCommand",
     "ShutdownCommand",

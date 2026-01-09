@@ -391,12 +391,6 @@ class TestBatchRoutes:
 
         assert response.status_code == 409
 
-    def test_stop_sequence_not_running(self, client: TestClient):
-        """Test POST /api/batches/{id}/sequence/stop returns 409 if batch not running."""
-        response = client.post("/api/batches/batch_001/sequence/stop")
-
-        assert response.status_code == 409
-
 
 class TestSequenceRoutes:
     """Test suite for sequence routes."""

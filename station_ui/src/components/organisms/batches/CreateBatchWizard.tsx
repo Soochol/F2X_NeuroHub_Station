@@ -421,7 +421,7 @@ function SequenceSelectStep({
             MES Process <span className="text-red-500">*</span>
           </h3>
           <p className="text-sm mb-4" style={{ color: 'var(--color-text-secondary)' }}>
-            WIP 연동이 활성화되어 있습니다. 이 배치에서 실행할 MES 공정을 선택하세요.
+            WIP integration is enabled. Select the MES process to run for this batch.
           </p>
           <select
             value={selectedProcessId ?? ''}
@@ -446,7 +446,7 @@ function SequenceSelectStep({
           {!selectedProcessId && (
             <div className="flex items-center gap-2 mt-2 text-xs" style={{ color: 'var(--color-status-fail)' }}>
               <AlertCircle className="w-3.5 h-3.5" />
-              <span>MES Process 선택이 필요합니다</span>
+              <span>MES Process selection is required</span>
             </div>
           )}
         </div>

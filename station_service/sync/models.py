@@ -22,7 +22,7 @@ class ProcessStartRequest(BaseModel):
     """Request model for starting a process (착공)."""
 
     process_id: int = Field(..., ge=1, le=8, description="Process number (1-8)")
-    header_id: Optional[int] = Field(None, description="Process header ID for station/batch tracking")
+    process_session_id: Optional[int] = Field(None, description="Process session ID for station/batch tracking")
     operator_id: int = Field(..., gt=0, description="Operator ID")
     equipment_id: Optional[int] = Field(None, gt=0, description="Equipment ID (optional)")
     started_at: Optional[datetime] = Field(None, description="Start time (defaults to now)")
@@ -32,7 +32,7 @@ class ProcessCompleteRequest(BaseModel):
     """Request model for completing a process (완공)."""
 
     result: str = Field(..., pattern="^(PASS|FAIL|REWORK)$", description="Process result")
-    header_id: Optional[int] = Field(None, description="Process header ID for station/batch tracking")
+    process_session_id: Optional[int] = Field(None, description="Process session ID for station/batch tracking")
     measurements: Dict[str, Any] = Field(
         default_factory=dict,
         description="Measurement data from sequence execution",

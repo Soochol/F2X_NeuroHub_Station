@@ -21,7 +21,6 @@ export {
   useStopBatch,
   useDeleteBatch,
   useStartSequence,
-  useStopSequence,
   useManualControl,
   useCreateBatches,
   useUpdateBatchConfig,

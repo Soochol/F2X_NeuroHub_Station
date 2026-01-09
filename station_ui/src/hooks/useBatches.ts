@@ -12,7 +12,6 @@ import {
   startBatch,
   stopBatch,
   startSequence,
-  stopSequence,
   manualControl,
   createBatches,
   updateBatchConfig,
@@ -310,47 +309,6 @@ export function useStartSequence() {
         updateBatchStatus(variables.batchId, context.previousStatus as BatchStatus);
       }
       toast.error(`Failed to start sequence: ${getErrorMessage(error)}`);
-    },
-  });
-}
-
-/**
- * Hook to stop a sequence.
- * Uses optimistic update for immediate UI feedback.
- */
-export function useStopSequence() {
-  const queryClient = useQueryClient();
-  const updateBatchStatus = useBatchStore((state) => state.updateBatchStatus);
-
-  return useMutation({
-    mutationFn: (batchId: string) => stopSequence(batchId),
-    onMutate: async (batchId: string) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: queryKeys.batch(batchId) });
-      await queryClient.cancelQueries({ queryKey: queryKeys.batches });
-
-      // Get previous status for rollback
-      const batch = useBatchStore.getState().batches.get(batchId);
-      const previousStatus = batch?.status ?? 'running';
-
-      // Optimistically update to 'stopping' immediately
-      updateBatchStatus(batchId, 'stopping');
-
-      return { batchId, previousStatus };
-    },
-    onSuccess: (_, batchId) => {
-      // Set to idle after successful stop
-      updateBatchStatus(batchId, 'idle');
-      queryClient.invalidateQueries({ queryKey: queryKeys.batch(batchId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.batches });
-      toast.success('Sequence stopped successfully');
-    },
-    onError: (error: unknown, batchId: string, context) => {
-      // Rollback to previous status on error
-      if (context?.previousStatus) {
-        updateBatchStatus(batchId, context.previousStatus as BatchStatus);
-      }
-      toast.error(`Failed to stop sequence: ${getErrorMessage(error)}`);
     },
   });
 }

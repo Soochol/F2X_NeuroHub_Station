@@ -885,23 +885,23 @@ class BackendClient:
     # ================================================================
 
     @with_auth(AuthMode.API_KEY)
-    async def open_header(
+    async def open_session(
         self,
         request: ProcessHeaderOpenRequest,
     ) -> ProcessHeaderResponse:
         """
-        Open a process header for station/batch tracking.
+        Open a process session for station/batch tracking.
 
-        This is called when a batch starts processing. If a header already exists
+        This is called when a batch starts processing. If a session already exists
         for the same station+batch+process combination, it will be returned.
 
         Uses API Key authentication (service-level call).
 
         Args:
-            request: Header open request with station_id, batch_id, process_id, etc.
+            request: Session open request with station_id, batch_id, process_id, etc.
 
         Returns:
-            ProcessHeaderResponse with header ID and details
+            ProcessHeaderResponse with session ID and details
 
         Raises:
             BackendConnectionError: If client not connected
@@ -921,7 +921,7 @@ class BackendClient:
             if response.status_code in (200, 201):
                 data = response.json()
                 logger.info(
-                    f"Process header opened: id={data['id']}, "
+                    f"Process session opened: id={data['id']}, "
                     f"station={request.station_id}, batch={request.batch_id}"
                 )
                 return ProcessHeaderResponse.from_api_response(data)
@@ -933,22 +933,22 @@ class BackendClient:
             raise BackendConnectionError(self._config.url, str(e))
 
     @with_auth(AuthMode.API_KEY)
-    async def close_header(
+    async def close_session(
         self,
-        header_id: int,
+        session_id: int,
         status: str = "CLOSED",
     ) -> ProcessHeaderResponse:
         """
-        Close a process header when batch completes.
+        Close a process session when batch completes.
 
         Uses API Key authentication (service-level call).
 
         Args:
-            header_id: Header ID to close
+            session_id: Session ID to close
             status: Final status (CLOSED or CANCELLED)
 
         Returns:
-            ProcessHeaderResponse with updated header details
+            ProcessHeaderResponse with updated session details
 
         Raises:
             BackendConnectionError: If client not connected
@@ -957,7 +957,7 @@ class BackendClient:
         if not self._client:
             raise BackendConnectionError(self._config.url, "Client not connected")
 
-        url = f"/api/v1/process-headers/{header_id}/close"
+        url = f"/api/v1/process-headers/{session_id}/close"
         params = {"status": status}
 
         try:
@@ -966,39 +966,39 @@ class BackendClient:
 
             if response.status_code == 200:
                 data = response.json()
-                logger.info(f"Process header closed: id={header_id}, status={status}")
+                logger.info(f"Process session closed: id={session_id}, status={status}")
                 return ProcessHeaderResponse.from_api_response(data)
 
             # Handle error
-            self._raise_backend_error(response, f"header_id={header_id}")
+            self._raise_backend_error(response, f"session_id={session_id}")
 
         except httpx.RequestError as e:
             raise BackendConnectionError(self._config.url, str(e))
 
     @with_auth(AuthMode.API_KEY)
-    async def get_header(
+    async def get_session(
         self,
-        header_id: int,
+        session_id: int,
     ) -> ProcessHeaderResponse:
         """
-        Get process header by ID.
+        Get process session by ID.
 
         Uses API Key authentication (service-level call).
 
         Args:
-            header_id: Header ID to retrieve
+            session_id: Session ID to retrieve
 
         Returns:
-            ProcessHeaderResponse with header details
+            ProcessHeaderResponse with session details
 
         Raises:
             BackendConnectionError: If client not connected
-            BackendError: If API call fails or header not found
+            BackendError: If API call fails or session not found
         """
         if not self._client:
             raise BackendConnectionError(self._config.url, "Client not connected")
 
-        url = f"/api/v1/process-headers/{header_id}"
+        url = f"/api/v1/process-headers/{session_id}"
 
         try:
             headers = self._get_api_key_header()
@@ -1010,12 +1010,12 @@ class BackendClient:
 
             if response.status_code == 404:
                 raise BackendError(
-                    message=f"Process header not found: {header_id}",
-                    code="HEADER_NOT_FOUND",
+                    message=f"Process session not found: {session_id}",
+                    code="SESSION_NOT_FOUND",
                     status_code=404,
                 )
 
-            self._raise_backend_error(response, f"header_id={header_id}")
+            self._raise_backend_error(response, f"session_id={session_id}")
 
         except httpx.RequestError as e:
             raise BackendConnectionError(self._config.url, str(e))

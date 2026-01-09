@@ -3,7 +3,7 @@ station:
   name: Test Station
   description: Test description
 workflow:
-  enabled: true
+  enabled: false
   input_mode: popup
   auto_sequence_start: true
   require_operator_login: false

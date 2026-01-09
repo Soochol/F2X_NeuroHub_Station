@@ -16,7 +16,6 @@ class CommandType(str, Enum):
     """IPC command types from master to worker."""
 
     START_SEQUENCE = "START_SEQUENCE"
-    STOP_SEQUENCE = "STOP_SEQUENCE"
     GET_STATUS = "GET_STATUS"
     MANUAL_CONTROL = "MANUAL_CONTROL"
     SHUTDOWN = "SHUTDOWN"
