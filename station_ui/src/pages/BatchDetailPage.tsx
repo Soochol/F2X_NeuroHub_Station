@@ -367,14 +367,14 @@ export function BatchDetailPage() {
     >
     <div className="min-h-full p-6 space-y-6" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
       {/* Header with Back Button */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="ghost" size="sm" onClick={handleBack}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>{batch.name}</h1>
-            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>ID: {batch.id}</p>
+          <div className="min-w-0 flex-shrink">
+            <h1 className="text-2xl font-bold truncate" style={{ color: 'var(--color-text-primary)' }}>{batch.name}</h1>
+            <p className="text-sm truncate" style={{ color: 'var(--color-text-tertiary)' }}>ID: {batch.id}</p>
           </div>
           <StatusBadge status={batch.status} />
           {/* Inline Statistics */}
@@ -407,7 +407,7 @@ export function BatchDetailPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {canStart && (
             <Button
               variant="primary"

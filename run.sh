@@ -2,36 +2,32 @@
 set -e
 
 echo "========================================"
-echo "  F2X Station Service - Update and Run"
+echo "  F2X Station Service - Hot Reload Mode"
 echo "  Port: 8080"
 echo "========================================"
 
 cd "$(dirname "$0")"
 
 echo ""
-echo "[1/3] Updating from GitHub..."
-if [ -d ".git" ]; then
-    if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-        git pull origin main || echo "WARNING: git pull failed. Continuing with local version."
-    else
-        echo "WARNING: .git folder found but not a valid git repository. Skipping update."
-    fi
-else
-    echo "NOTE: Not a git repository. Skipping update."
-fi
-
-echo ""
-echo "[2/3] Installing dependencies..."
+echo "[1/2] Setting up environment..."
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment..."
     python3 -m venv .venv
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Failed to create virtual environment"
+        exit 1
+    fi
 fi
 
-source .venv/bin/activate
-python -m pip install -e . --quiet
+.venv/bin/pip3 install -e . --quiet
+if [ $? -ne 0 ]; then
+    echo "ERROR: pip install failed"
+    exit 1
+fi
 
 echo ""
-echo "[3/3] Starting Station Service..."
+echo "[2/2] Starting Station Service with Hot Reload..."
+echo "File changes will auto-reload the server."
 echo "Press Ctrl+C to stop"
 export STATION_CONFIG=./config/station.yaml
-python -m station_service.main
+.venv/bin/uvicorn station_service.main:app --host 0.0.0.0 --port 8080 --reload --reload-dir station_service

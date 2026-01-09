@@ -36,7 +36,6 @@ interface BatchDetailApiResponse {
   status: string;
   config?: Record<string, unknown>;
   processId?: number;
-  headerId?: number;
   sequence?: {
     name?: string;
     version?: string;
@@ -145,7 +144,6 @@ export async function getBatch(batchId: string): Promise<BatchDetail> {
     config: data.config || {},
     hardwareStatus,
     processId: data.processId,
-    headerId: data.headerId,
     execution: data.execution ? {
       // Map API status to ExecutionStatus ('running' | 'completed' | 'failed' | 'stopped')
       status: (() => {
@@ -325,8 +323,6 @@ export interface UpdateBatchRequest {
   parameters?: Record<string, unknown>;
   /** @deprecated Use config.processId instead */
   processId?: number;
-  /** @deprecated Use config.headerId instead */
-  headerId?: number;
 }
 
 /**
@@ -361,7 +357,6 @@ export async function updateBatch(
   if (request.parameters !== undefined) serverRequest.parameters = request.parameters;
   // Legacy fields (deprecated)
   if (request.processId !== undefined) serverRequest.process_id = request.processId;
-  if (request.headerId !== undefined) serverRequest.header_id = request.headerId;
 
   const response = await apiClient.put<ApiResponse<{ batchId: string; status: string }>>(
     `/batches/${batchId}`,

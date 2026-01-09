@@ -39,7 +39,6 @@ export function BatchConfigEditor({ batchId, isRunning, onDirtyChange }: BatchCo
   // Check if MES process is required but not configured
   const isWorkflowEnabled = workflowConfig?.enabled ?? false;
   const processId = editedConfig.processId as number | undefined;
-  const headerId = editedConfig.headerId as number | undefined;
   const isMesProcessMissing = isWorkflowEnabled && !processId;
 
   // Check if there are unsaved changes
@@ -236,34 +235,8 @@ export function BatchConfigEditor({ batchId, isRunning, onDirtyChange }: BatchCo
           </select>
         </div>
 
-        {/* Header ID Input */}
-        <div className="mb-4 pb-3 border-b" style={{ borderColor: 'var(--color-border-default)' }}>
-          <label
-            className="block text-xs font-medium mb-1.5"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
-            Header ID
-          </label>
-          <input
-            type="number"
-            value={headerId ?? ''}
-            onChange={(e) => handleConfigChange('headerId', e.target.value)}
-            disabled={isRunning}
-            placeholder="Enter header ID (e.g., 1, 2, 3...)"
-            className="w-full text-xs rounded px-2 py-1.5 border outline-none transition-colors disabled:opacity-50"
-            style={{
-              backgroundColor: 'var(--color-bg-tertiary)',
-              borderColor: headerId ? 'var(--color-border-default)' : 'var(--color-status-warning)',
-              color: 'var(--color-text-primary)',
-            }}
-          />
-          <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>
-            Unique ID to distinguish batches within the same process
-          </p>
-        </div>
-
         {/* Other config fields */}
-        {Object.keys(editedConfig).filter(k => k !== 'processId' && k !== 'headerId').length === 0 ? (
+        {Object.keys(editedConfig).filter(k => k !== 'processId').length === 0 ? (
           !isWorkflowEnabled && (
             <p className="text-xs italic" style={{ color: 'var(--color-text-tertiary)' }}>
               No configuration for this batch.

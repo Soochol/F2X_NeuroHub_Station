@@ -124,14 +124,12 @@ export interface Batch {
 export interface BatchDetail extends Batch {
   /** Sequence parameters */
   parameters: Record<string, unknown>;
-  /** Dynamic batch configuration (processId, headerId, etc.) */
+  /** Dynamic batch configuration (processId, slotId, etc.) */
   config: Record<string, unknown>;
   /** Hardware status by device ID */
   hardwareStatus: Record<string, HardwareStatus>;
   /** [Deprecated] Use config.processId instead */
   processId?: number;
-  /** [Deprecated] Use config.headerId instead */
-  headerId?: number;
   /** Current execution status */
   execution?: {
     status: ExecutionStatus;

@@ -328,8 +328,6 @@ async def get_batch(
         # Legacy field migration: if not in config, add from legacy fields
         if "processId" not in batch_config_dict and batch_config.process_id:
             batch_config_dict["processId"] = batch_config.process_id
-        if "headerId" not in batch_config_dict and batch_config.header_id:
-            batch_config_dict["headerId"] = batch_config.header_id
 
         detail = BatchDetail(
             id=batch_id,
@@ -358,7 +356,6 @@ async def get_batch(
             last_run_passed=status_data.get("last_run_passed"),
             # Legacy fields for backward compatibility
             process_id=batch_config.get_process_id(),
-            header_id=batch_config.get_header_id(),
         )
 
         return ApiResponse(success=True, data=detail)
@@ -731,8 +728,6 @@ async def create_batch(
         merged_config = dict(request.config) if request.config else {}
         if request.process_id and "processId" not in merged_config:
             merged_config["processId"] = request.process_id
-        if request.header_id and "headerId" not in merged_config:
-            merged_config["headerId"] = request.header_id
 
         # Create BatchConfig from request
         batch_config = BatchConfig(

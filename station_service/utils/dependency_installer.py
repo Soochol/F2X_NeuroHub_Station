@@ -173,10 +173,11 @@ def install_sequence_dependencies(sequence_dir: Path) -> List[str]:
                 logger.warning(f"ensurepip failed: {ensurepip_result.stderr}")
 
         # Try using sys.executable first, fallback to pip3/pip if pip module not available
+        # Use --break-system-packages to bypass externally-managed-environment restriction
         pip_commands = [
-            [sys.executable, "-m", "pip", "install", *missing],
-            ["pip3", "install", "--user", *missing],
-            ["pip", "install", "--user", *missing],
+            [sys.executable, "-m", "pip", "install", "--break-system-packages", *missing],
+            ["pip3", "install", "--user", "--break-system-packages", *missing],
+            ["pip", "install", "--user", "--break-system-packages", *missing],
         ]
 
         result = None

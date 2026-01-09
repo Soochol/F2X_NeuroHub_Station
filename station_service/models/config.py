@@ -142,14 +142,11 @@ class BatchConfig(BaseModel):
     # Dynamic config object (replaces hardcoded process_id, header_id)
     config: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Dynamic batch configuration (processId, headerId, etc.)"
+        description="Dynamic batch configuration (processId, slotId, etc.)"
     )
     # Legacy fields - deprecated, use config instead
     process_id: Optional[int] = Field(
         None, description="[Deprecated] Use config.processId instead"
-    )
-    header_id: Optional[int] = Field(
-        None, description="[Deprecated] Use config.headerId instead"
     )
     parameters: Dict[str, Any] = Field(
         default_factory=dict, description="Batch parameters for sequence execution"
@@ -167,8 +164,8 @@ class BatchConfig(BaseModel):
         return self.config.get("processId") or self.process_id
 
     def get_header_id(self) -> Optional[int]:
-        """Get header_id from config or legacy field."""
-        return self.config.get("headerId") or self.header_id
+        """Get header_id from config dict."""
+        return self.config.get("headerId")
 
 
 class LoggingConfig(BaseModel):
