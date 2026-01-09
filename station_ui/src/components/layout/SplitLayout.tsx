@@ -5,7 +5,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 
 interface SplitLayoutProps {
   /** Main content */
@@ -18,8 +17,6 @@ interface SplitLayoutProps {
   isCollapsed: boolean;
   /** Callback when panel width changes */
   onResize: (width: number) => void;
-  /** Callback when panel is toggled */
-  onToggle: () => void;
   /** Minimum panel width (default: 280) */
   minWidth?: number;
   /** Maximum panel width (default: 600) */
@@ -34,7 +31,6 @@ export function SplitLayout({
   panelWidth,
   isCollapsed,
   onResize,
-  onToggle,
   minWidth = 280,
   maxWidth = 600,
   panelTitle = 'Details',
@@ -98,25 +94,7 @@ export function SplitLayout({
         {children}
       </div>
 
-      {/* Toggle button - always visible at same position */}
-      <button
-        onClick={onToggle}
-        className="fixed z-40 p-2 rounded-l-lg border-l border-t border-b transition-all duration-200 hover:bg-zinc-700"
-        style={{
-          backgroundColor: 'var(--color-bg-secondary)',
-          borderColor: 'var(--color-border-default)',
-          right: isCollapsed ? 0 : panelWidth,
-          top: '50%',
-          transform: 'translateY(-50%)',
-        }}
-        title={isCollapsed ? 'Open debug panel' : 'Close panel'}
-      >
-        {isCollapsed ? (
-          <PanelRightOpen className="w-5 h-5" style={{ color: 'var(--color-text-secondary)' }} />
-        ) : (
-          <PanelRightClose className="w-5 h-5" style={{ color: 'var(--color-text-secondary)' }} />
-        )}
-      </button>
+      {/* Toggle button removed - panel is now always open */}
 
       {/* Right panel */}
       <div

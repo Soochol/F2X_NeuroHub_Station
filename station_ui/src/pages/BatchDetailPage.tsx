@@ -61,7 +61,7 @@ export function BatchDetailPage() {
   const deleteBatch = useDeleteBatch();
 
   // Debug panel state - must be called before any early returns
-  const { isCollapsed, panelWidth, setPanelWidth, toggleCollapsed, setSelectedStep } = useDebugPanelStore();
+  const { isCollapsed, panelWidth, setPanelWidth, setSelectedStep, setCollapsed } = useDebugPanelStore();
 
   // Workflow configuration
   const { data: workflowConfig } = useWorkflowConfig();
@@ -80,6 +80,11 @@ export function BatchDetailPage() {
   const handlePendingChangesChange = useCallback((hasPending: boolean) => {
     setHasPendingChanges(hasPending);
   }, []);
+
+  // Force panel to always be open (no toggle button available)
+  useEffect(() => {
+    setCollapsed(false);
+  }, [setCollapsed]);
 
   // Subscribe to real-time updates for this batch
   // NOTE: We intentionally don't unsubscribe on cleanup because:
@@ -362,12 +367,11 @@ export function BatchDetailPage() {
       panelWidth={panelWidth}
       isCollapsed={isCollapsed}
       onResize={setPanelWidth}
-      onToggle={toggleCollapsed}
       panelTitle="Batch Panel"
     >
-    <div className="min-h-full p-6 space-y-6" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
+    <div className="min-h-full p-4 space-y-6" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
       {/* Header with Back Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col items-start lg:flex-row lg:items-center gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="ghost" size="sm" onClick={handleBack}>
             <ArrowLeft className="w-5 h-5" />
@@ -407,7 +411,7 @@ export function BatchDetailPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-start gap-1 lg:gap-1.5 flex-wrap ml-auto">
           {canStart && (
             <Button
               variant="primary"

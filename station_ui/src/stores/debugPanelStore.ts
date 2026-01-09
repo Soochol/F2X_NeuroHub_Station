@@ -81,8 +81,7 @@ export const useDebugPanelStore = create<DebugPanelState>()(
     {
       name: 'debug-panel-state',
       partialize: (state) => ({
-        // Only persist these fields
-        isCollapsed: state.isCollapsed,
+        // Only persist these fields (isCollapsed removed - panel is always open)
         panelWidth: state.panelWidth,
         activeTab: state.activeTab,
         autoScroll: state.autoScroll,
