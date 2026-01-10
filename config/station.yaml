@@ -87,7 +87,7 @@ batches:
   parameters:
     delay_per_step: 0.5
   config:
-    processId: 2
+    processId: 1
     slotId: 3
 logging:
   level: INFO

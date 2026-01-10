@@ -150,28 +150,8 @@ export function Sidebar({ isCollapsed, onToggle, stationId, stationName }: Sideb
         borderRight: '1px solid var(--color-border-default)',
       }}
     >
-      {/* Logo and Toggle */}
-      <div
-        className="flex items-center justify-between p-4 min-h-[64px]"
-      >
-        <div className="flex items-center gap-3">
-          {/* Logo Icon */}
-          <div
-            className="w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: 'var(--color-brand-500)' }}
-          >
-            <Activity className="w-5 h-5 text-white" />
-          </div>
-          {!isCollapsed && (
-            <span
-              className="font-semibold whitespace-nowrap"
-              style={{ color: 'var(--color-text-primary)' }}
-            >
-              Station UI
-            </span>
-          )}
-        </div>
-
+      {/* Toggle and Title */}
+      <div className="flex items-center gap-3 p-4 min-h-[64px]">
         {/* Toggle Button */}
         <button
           onClick={onToggle}
@@ -189,6 +169,15 @@ export function Sidebar({ isCollapsed, onToggle, stationId, stationName }: Sideb
         >
           {isCollapsed ? <PanelLeft className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
         </button>
+
+        {!isCollapsed && (
+          <span
+            className="font-semibold whitespace-nowrap"
+            style={{ color: 'var(--color-text-primary)' }}
+          >
+            Station UI
+          </span>
+        )}
       </div>
 
       {/* Navigation */}

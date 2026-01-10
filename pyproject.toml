@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "station-service"
 version = "1.0.0"
 description = "Station Service for test sequence execution"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "F2X", email = "dev@f2x.com" }
 ]
