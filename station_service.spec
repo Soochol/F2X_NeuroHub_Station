@@ -7,8 +7,8 @@ import os
 import sys
 from pathlib import Path
 
-# Project paths
-project_root = Path(__file__).parent
+# Project paths (SPECPATH is provided by PyInstaller)
+project_root = Path(SPECPATH)
 station_service_dir = project_root / 'station_service'
 static_dir = station_service_dir / 'static'
 config_dir = project_root / 'config'
@@ -35,6 +35,8 @@ a = Analysis(
         (str(static_dir), 'station_service/static'),
         # Config template
         (str(config_dir / 'station.yaml.example'), 'config'),
+        # Database schema
+        (str(station_service_dir / 'storage' / 'schema.sql'), 'station_service/storage'),
     ],
     hiddenimports=[
         # FastAPI core
@@ -126,6 +128,11 @@ a = Analysis(
         'station_service.storage',
         'station_service.sync',
         'station_service.utils',
+        'station_service.tray',
+
+        # System tray support
+        'pystray',
+        'pystray._win32',
     ],
     hookspath=[],
     hooksconfig={},
@@ -166,7 +173,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,  # Don't use UPX compression (can cause issues)
-    console=True,  # Show console for logging
+    console=True,  # Enable console for debugging
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

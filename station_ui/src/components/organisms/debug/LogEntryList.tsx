@@ -8,7 +8,6 @@ import { FileText } from 'lucide-react';
 import { useLogStore } from '../../../stores';
 import { useDebugPanelStore } from '../../../stores/debugPanelStore';
 import { LogEntryRow } from '../../molecules/LogEntryRow';
-import type { LogLevel } from '../../../types';
 
 interface LogEntryListProps {
   /** Batch ID to filter logs */

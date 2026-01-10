@@ -6,12 +6,14 @@ with real hardware, without requiring a Batch.
 """
 
 import logging
+from pathlib import Path as FilePath
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
 from station_service.api.dependencies import get_sequence_loader
+from station_service.utils.dependency_installer import install_sequence_dependencies
 from station_service.api.schemas.responses import ApiResponse, ErrorResponse
 from station_service_sdk import (
     SequenceLoader,
@@ -301,9 +303,20 @@ def cmd_to_response(cmd: CommandResult) -> CommandResultResponse:
 async def create_session(
     request: CreateManualSessionRequest,
     executor: ManualSequenceExecutor = Depends(get_manual_executor),
+    sequence_loader: SequenceLoader = Depends(get_sequence_loader),
 ) -> ApiResponse[ManualSessionDetail]:
     """Create a new manual test session."""
     try:
+        # Install sequence dependencies before loading
+        package_path = sequence_loader.get_package_path(request.sequence_name)
+        pyproject_path = FilePath(package_path) / "pyproject.toml"
+        if pyproject_path.exists():
+            installed = install_sequence_dependencies(FilePath(package_path))
+            if installed:
+                logger.info(
+                    f"Installed dependencies for {request.sequence_name}: {installed}"
+                )
+
         session = await executor.create_session(
             sequence_name=request.sequence_name,
             hardware_config=request.hardware_config,

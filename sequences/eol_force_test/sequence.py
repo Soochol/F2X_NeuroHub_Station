@@ -89,9 +89,13 @@ class EOLForceTestSequence(SequenceBase):
         self.emit_log("info", "Starting EOL Force Test setup...")
 
         try:
-            # Initialize hardware adapter if not provided
-            if self._hardware is None:
-                self.emit_log("info", "Initializing hardware adapter...")
+            # Check if running in simulation/dry_run mode
+            if self.context.dry_run:
+                self.emit_log("info", "Running in simulation mode - using mock hardware")
+                self._hardware = await self._create_mock_hardware_adapter()
+                self.emit_log("info", "Mock hardware adapter initialized")
+            elif self._hardware is None:
+                self.emit_log("info", "Initializing real hardware adapter...")
                 self._hardware = await self._create_hardware_adapter()
                 self.emit_log("info", "Hardware adapter initialized")
 
@@ -310,6 +314,44 @@ class EOLForceTestSequence(SequenceBase):
         return create_standalone_hardware_adapter(
             test_config=test_config,
             hardware_config=hardware_config,
+        )
+
+    async def _create_mock_hardware_adapter(self) -> "EOLHardwareAdapter":
+        """Create mock hardware adapter for simulation/dry_run mode."""
+        from .hardware_adapter import EOLHardwareAdapter
+        from .hardware.factory import HardwareFactory
+        from .services.hardware_facade import HardwareServiceFacade
+        from .domain.value_objects import HardwareConfig
+
+        # Collect parameter overrides
+        overrides = self._collect_parameter_overrides()
+
+        # Create test config with overrides
+        test_config = TestConfiguration()
+        if overrides:
+            test_config = test_config.with_overrides(**overrides)
+
+        # Use all-mock hardware configuration
+        mock_config = HardwareFactory.get_default_mock_config()
+        hardware = HardwareFactory.create_all_hardware(mock_config)
+
+        # Create facade with mock hardware services
+        facade = HardwareServiceFacade(
+            robot_service=hardware.get("robot"),
+            mcu_service=hardware.get("mcu"),
+            loadcell_service=hardware.get("loadcell"),
+            power_service=hardware.get("power"),
+            digital_io_service=hardware.get("digital_io"),
+        )
+
+        # Create mock HardwareConfig for adapter
+        mock_hw_config = HardwareConfig()  # Default is mock mode
+
+        logger.info("Creating mock hardware adapter for simulation mode")
+        return EOLHardwareAdapter(
+            hardware_facade=facade,
+            test_config=test_config,
+            hardware_config=mock_hw_config,
         )
 
     def _collect_parameter_overrides(self) -> Dict[str, Any]:

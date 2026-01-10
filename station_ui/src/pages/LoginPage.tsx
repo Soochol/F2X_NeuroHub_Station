@@ -37,18 +37,29 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       // Handle different error formats
       if (err && typeof err === 'object') {
         const errorObj = err as Record<string, unknown>;
-        // API error format: { code, message, status }
-        if (errorObj.message) {
-          setError(String(errorObj.message));
+        const code = errorObj.code as string | undefined;
+        const message = errorObj.message as string | undefined;
+
+        // Provide user-friendly error messages based on error code
+        if (code === 'NETWORK_ERROR') {
+          setError('서버에 연결할 수 없습니다. Station Service가 실행 중인지 확인해주세요.');
+        } else if (code === 'SERVICE_UNAVAILABLE') {
+          setError(message || '백엔드 MES 서버에 연결할 수 없습니다.');
+        } else if (code === 'TIMEOUT') {
+          setError('요청 시간이 초과되었습니다. 네트워크 상태를 확인해주세요.');
+        } else if (code === 'UNAUTHORIZED') {
+          setError('아이디 또는 비밀번호가 올바르지 않습니다.');
+        } else if (message) {
+          setError(message);
         } else if (errorObj.detail) {
           setError(String(errorObj.detail));
         } else {
-          setError('Login failed. Please try again.');
+          setError('로그인에 실패했습니다. 다시 시도해주세요.');
         }
       } else if (err instanceof Error) {
-        setError(err.message || 'Login failed');
+        setError(err.message || '로그인에 실패했습니다.');
       } else {
-        setError('Login failed. Please try again.');
+        setError('로그인에 실패했습니다. 다시 시도해주세요.');
       }
     }
   };

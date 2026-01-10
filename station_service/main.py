@@ -68,6 +68,21 @@ _container: Optional[ServiceContainer] = None
 _backend_client: Optional[BackendClient] = None
 
 
+def get_application_root() -> Path:
+    """
+    Get the application root directory.
+
+    For PyInstaller frozen executables, this returns the directory containing the EXE.
+    For normal Python execution, this returns the project root (parent of station_service/).
+    """
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller bundle - EXE is in the root folder
+        return Path(sys.executable).parent
+    else:
+        # Running as normal Python script
+        return Path(__file__).parent.parent
+
+
 def load_config(config_path: Optional[str] = None) -> StationConfig:
     """
     Load configuration from YAML file.
@@ -88,12 +103,18 @@ def load_config(config_path: Optional[str] = None) -> StationConfig:
     path = Path(config_path)
 
     if not path.exists():
-        # Try relative to module
-        module_path = Path(__file__).parent / config_path
-        if module_path.exists():
-            path = module_path
+        # Try relative to application root (works for both frozen EXE and normal Python)
+        app_root = get_application_root()
+        app_root_path = app_root / config_path
+        if app_root_path.exists():
+            path = app_root_path
         else:
-            raise FileNotFoundError(f"Config file not found: {config_path}")
+            # Fallback: try relative to module (for development)
+            module_path = Path(__file__).parent / config_path
+            if module_path.exists():
+                path = module_path
+            else:
+                raise FileNotFoundError(f"Config file not found: {config_path}")
 
     logger.info(f"Loading configuration from: {path}")
 
@@ -192,10 +213,10 @@ async def lifespan(app: FastAPI):
         config = load_config()
         logger.info(f"Loaded config for station: {config.station.name}")
 
-        # Compute paths from config
-        # __file__ = station/station_service/main.py
-        # project_root = station/ (where pyproject.toml is)
-        project_root = Path(__file__).parent.parent
+        # Compute paths from config using application root
+        # For frozen EXE: directory containing StationService.exe
+        # For normal Python: project root (parent of station_service/)
+        project_root = get_application_root()
 
         # Resolve sequences_dir (can be relative or absolute)
         sequences_dir_config = config.paths.sequences_dir
@@ -381,7 +402,14 @@ def create_application() -> FastAPI:
 
     # Mount static files for UI (if directory exists)
     # NOTE: Static files mounted at /ui to avoid conflict with /api routes
-    static_dir = Path(__file__).parent / "static"
+    # For PyInstaller, use _MEIPASS; for normal Python, use __file__
+    if getattr(sys, 'frozen', False):
+        # PyInstaller bundles files in _MEIPASS/_internal
+        static_dir = Path(sys._MEIPASS) / "station_service" / "static"
+    else:
+        static_dir = Path(__file__).parent / "static"
+
+    logger.info(f"Checking static directory: {static_dir} (exists: {static_dir.exists()})")
     if static_dir.exists():
         from fastapi.responses import RedirectResponse, FileResponse
 
@@ -426,6 +454,14 @@ app = create_application()
 def main():
     """Main entry point for running the service."""
     import uvicorn
+    from station_service.tray import TrayIcon, set_tray_icon
+
+    # Fix for PyInstaller windowed mode: redirect stdout/stderr to devnull if None
+    # This prevents uvicorn's logging formatter from crashing on sys.stdout.isatty()
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
 
     # Load config for server settings
     try:
@@ -436,16 +472,38 @@ def main():
         host = "0.0.0.0"
         port = 8080
 
+    # Initialize system tray icon (Windows only)
+    tray_icon = None
+    if sys.platform == "win32":
+        try:
+            # Define exit callback that will stop uvicorn
+            def on_tray_exit():
+                logger.info("Shutdown requested from tray menu")
+                # This will be called from the tray thread
+                import os
+                os._exit(0)
+
+            tray_icon = TrayIcon(port=port, on_exit=on_tray_exit)
+            tray_icon.start()
+            set_tray_icon(tray_icon)
+        except Exception as e:
+            logger.warning(f"Failed to start tray icon: {e}")
+
     logger.info(f"Starting server on {host}:{port}")
 
-    uvicorn.run(
-        "station_service.main:app",
-        host=host,
-        port=port,
-        reload=False,
-        loop="asyncio",
-        log_level="info",
-    )
+    try:
+        # Use app object directly instead of module string for PyInstaller compatibility
+        # Module string "station_service.main:app" doesn't work in frozen executables
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            log_level="info",
+        )
+    finally:
+        # Cleanup tray icon
+        if tray_icon:
+            tray_icon.stop()
 
 
 if __name__ == "__main__":

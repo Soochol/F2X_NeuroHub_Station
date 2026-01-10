@@ -10,11 +10,12 @@ import { toast, getErrorMessage } from '../utils';
  * Error codes for specific handling.
  */
 const ERROR_MESSAGES: Record<string, string> = {
-  UNAUTHORIZED: 'API 키가 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.',
-  NETWORK_ERROR: '네트워크 연결을 확인해주세요.',
+  UNAUTHORIZED: '아이디 또는 비밀번호가 올바르지 않습니다.',
+  NETWORK_ERROR: '서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.',
   NOT_FOUND: '요청한 리소스를 찾을 수 없습니다.',
   TIMEOUT: '요청 시간이 초과되었습니다.',
   INTERNAL_ERROR: '서버 내부 오류가 발생했습니다.',
+  SERVICE_UNAVAILABLE: '백엔드 MES 서버에 연결할 수 없습니다.',
 };
 
 /**
@@ -34,6 +35,7 @@ function extractErrorCode(error: unknown): string | null {
   if (status === 401) return 'UNAUTHORIZED';
   if (status === 404) return 'NOT_FOUND';
   if (status === 500) return 'INTERNAL_ERROR';
+  if (status === 503) return 'SERVICE_UNAVAILABLE';
 
   // Network error
   const errWithCode = error as { code?: string };

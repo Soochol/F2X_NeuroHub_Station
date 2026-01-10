@@ -62,9 +62,23 @@ apiClient.interceptors.response.use(
     // Check for FastAPI HTTPException format (detail field)
     if (responseData?.detail) {
       const detail = responseData.detail;
+      // Extract meaningful message based on status code
+      let code = 'API_ERROR';
+      let message = typeof detail === 'string' ? detail : JSON.stringify(detail);
+
+      if (status === 503) {
+        code = 'SERVICE_UNAVAILABLE';
+        // Backend connection error typically contains "Cannot connect to backend"
+        if (message.includes('connect to backend') || message.includes('Backend')) {
+          message = '백엔드 MES 서버에 연결할 수 없습니다.';
+        }
+      } else if (status === 401) {
+        code = 'UNAUTHORIZED';
+      }
+
       return Promise.reject({
-        code: 'API_ERROR',
-        message: typeof detail === 'string' ? detail : JSON.stringify(detail),
+        code,
+        message,
         status,
       } as ApiError);
     }
@@ -72,20 +86,30 @@ apiClient.interceptors.response.use(
     if (error.code === 'ECONNABORTED') {
       return Promise.reject({
         code: 'TIMEOUT',
-        message: 'Request timed out',
+        message: '요청 시간이 초과되었습니다.',
+        status,
       } as ApiError);
     }
 
-    if (!error.response) {
+    if (error.code === 'ERR_NETWORK' || !error.response) {
       return Promise.reject({
         code: 'NETWORK_ERROR',
-        message: 'Unable to connect to server',
+        message: '서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.',
+      } as ApiError);
+    }
+
+    // Handle specific HTTP status codes
+    if (status === 503) {
+      return Promise.reject({
+        code: 'SERVICE_UNAVAILABLE',
+        message: '서버에 연결할 수 없습니다.',
+        status,
       } as ApiError);
     }
 
     return Promise.reject({
       code: 'UNKNOWN_ERROR',
-      message: error.message || 'An unknown error occurred',
+      message: error.message || '알 수 없는 오류가 발생했습니다.',
       status,
     } as ApiError);
   }

@@ -78,7 +78,7 @@ batches:
     reset_mode: HWrst
     frequency: 4000
   config:
-    processId: 1
+    processId: 2
     slotId: 1
 - id: test-batch-001
   name: Test Batch 001
