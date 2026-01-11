@@ -224,6 +224,15 @@ if not exist "%INSTALL_PATH%\StationService.exe" (
     exit /b 1
 )
 
+:: Kill any running processes before starting (safety check)
+tasklist /FI "IMAGENAME eq StationService.exe" 2>NUL | find /I /N "StationService.exe">NUL
+if "%ERRORLEVEL%"=="0" (
+    powershell -Command "%PS_YELLOW% ' Stopping existing processes...'"
+    powershell -Command "Get-Process -Name StationService -ErrorAction SilentlyContinue | Stop-Process -Force"
+    timeout /t 2 /nobreak >nul
+    powershell -Command "%PS_GREEN% ' Stopped'"
+)
+
 :: Show summary
 echo =============================================
 echo  Version: %LATEST_VERSION%

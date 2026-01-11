@@ -29,6 +29,16 @@ if not exist "%INSTALL_PATH%\StationService.exe" (
 :: Uncomment to enable automatic update checks
 :: start /min "" "%UPDATE_SCRIPT%"
 
+:: Check for running processes and stop them
+tasklist /FI "IMAGENAME eq StationService.exe" 2>NUL | find /I /N "StationService.exe">NUL
+if "%ERRORLEVEL%"=="0" (
+    echo Stopping existing StationService processes...
+    powershell -Command "Get-Process -Name StationService -ErrorAction SilentlyContinue | Stop-Process -Force"
+    timeout /t 2 /nobreak >nul
+    echo Stopped.
+    echo.
+)
+
 :: Run directly
 echo =============================================
 echo  F2X NeuroHub Station Service
