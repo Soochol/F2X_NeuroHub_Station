@@ -1,0 +1,63 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get version from tag
+        id: get_version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build project
+        shell: cmd
+        run: build.bat
+
+      - name: Get ZIP filename
+        id: get_zip
+        shell: bash
+        run: |
+          ZIP_FILE=$(ls dist/*.zip | head -1)
+          echo "ZIP_PATH=$ZIP_FILE" >> $GITHUB_OUTPUT
+          echo "ZIP_NAME=$(basename $ZIP_FILE)" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.get_zip.outputs.ZIP_PATH }}
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            Download and run the update script:
+
+            ```powershell
+            # Download update.ps1 from repository
+            .\update.ps1
+            ```
+
+            Or manually:
+            1. Stop StationService
+            2. Extract ZIP to `C:\StationService`
+            3. Start StationService
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
