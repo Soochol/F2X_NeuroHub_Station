@@ -55,6 +55,16 @@ echo.
 :: Step 1: Clean previous builds
 :: ============================================
 echo [1/6] Cleaning previous builds...
+
+:: Kill running StationService processes
+tasklist /FI "IMAGENAME eq StationService.exe" 2>NUL | find /I /N "StationService.exe">NUL
+if "%ERRORLEVEL%"=="0" (
+    echo   Stopping running StationService processes...
+    powershell -Command "Get-Process -Name StationService -ErrorAction SilentlyContinue | Stop-Process -Force"
+    timeout /t 2 /nobreak >nul
+    echo   Processes stopped.
+)
+
 if exist "%BUILD_DIR%" (
     echo   Removing build\
     rmdir /s /q "%BUILD_DIR%" 2>nul
