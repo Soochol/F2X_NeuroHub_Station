@@ -49,6 +49,7 @@ class TrayIcon:
         self._icon: Optional["pystray.Icon"] = None
         self._thread: Optional[threading.Thread] = None
         self._running = False
+        self._console_visible = True  # Track console window visibility
 
     def _create_icon_image(self, color: str = "green") -> "Image.Image":
         """
@@ -121,6 +122,12 @@ class TrayIcon:
                 enabled=False,
             ),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                lambda text: "Hide Console" if self._console_visible else "Show Console",
+                self._on_toggle_console,
+                checked=lambda item: self._console_visible,
+            ),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Open Logs Folder", self._on_open_logs),
             pystray.MenuItem("Open Config", self._on_open_config),
             pystray.Menu.SEPARATOR,
@@ -149,6 +156,33 @@ class TrayIcon:
         if config_file.exists() and sys.platform == "win32":
             import os
             os.startfile(str(config_file))
+
+    def _on_toggle_console(self, icon: "pystray.Icon", item: "pystray.MenuItem") -> None:
+        """Toggle console window visibility."""
+        if sys.platform != "win32":
+            return
+
+        try:
+            import ctypes
+            # Get console window handle
+            hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+
+            if hwnd:
+                # SW_HIDE = 0, SW_SHOW = 5
+                if self._console_visible:
+                    ctypes.windll.user32.ShowWindow(hwnd, 0)  # Hide
+                    self._console_visible = False
+                    logger.info("Console window hidden")
+                else:
+                    ctypes.windll.user32.ShowWindow(hwnd, 5)  # Show
+                    self._console_visible = True
+                    logger.info("Console window shown")
+
+                # Force menu update
+                if self._icon:
+                    self._icon.update_menu()
+        except Exception as e:
+            logger.error(f"Failed to toggle console: {e}", exc_info=True)
 
     def _on_exit(self, icon: "pystray.Icon", item: "pystray.MenuItem") -> None:
         """Handle exit request from tray menu."""
