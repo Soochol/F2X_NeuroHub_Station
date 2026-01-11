@@ -2,16 +2,21 @@ name: Build and Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+
+permissions:
+  contents: write
 
 jobs:
-  build-and-release:
+  release:
     runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for version calculation
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -23,41 +28,145 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Get version from tag
-        id: get_version
+      - name: Calculate next version
+        id: version
         shell: bash
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Parse version numbers
+          VERSION=${LATEST_TAG#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          # Get commit messages since last tag
+          COMMITS=$(git log ${LATEST_TAG}..HEAD --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+
+          # Determine version bump based on conventional commits
+          if echo "$COMMITS" | grep -qE "^(feat|feature)(\(.+\))?!:|^BREAKING CHANGE:"; then
+            # Breaking change -> bump major
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+            BUMP_TYPE="major"
+          elif echo "$COMMITS" | grep -qE "^(feat|feature)(\(.+\))?:"; then
+            # New feature -> bump minor
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            BUMP_TYPE="minor"
+          elif echo "$COMMITS" | grep -qE "^(fix|bugfix)(\(.+\))?:"; then
+            # Bug fix -> bump patch
+            PATCH=$((PATCH + 1))
+            BUMP_TYPE="patch"
+          else
+            # No conventional commit found -> bump patch
+            PATCH=$((PATCH + 1))
+            BUMP_TYPE="patch (default)"
+          fi
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "New version: v$NEW_VERSION ($BUMP_TYPE)"
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "TAG=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_OUTPUT
+
+      - name: Check if release needed
+        id: check_release
+        shell: bash
+        run: |
+          # Check if this version tag already exists
+          if git rev-parse "${{ steps.version.outputs.TAG }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.version.outputs.TAG }} already exists, skipping release"
+            echo "SKIP=true" >> $GITHUB_OUTPUT
+          else
+            echo "SKIP=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build project
+        if: steps.check_release.outputs.SKIP == 'false'
         shell: cmd
         run: build.bat
 
-      - name: Get ZIP filename
-        id: get_zip
+      - name: Rename ZIP file
+        if: steps.check_release.outputs.SKIP == 'false'
         shell: bash
         run: |
-          ZIP_FILE=$(ls dist/*.zip | head -1)
-          echo "ZIP_PATH=$ZIP_FILE" >> $GITHUB_OUTPUT
-          echo "ZIP_NAME=$(basename $ZIP_FILE)" >> $GITHUB_OUTPUT
+          cd dist
+          OLD_ZIP=$(ls *.zip | head -1)
+          NEW_ZIP="StationService_v${{ steps.version.outputs.VERSION }}_Windows_x64.zip"
+          if [ "$OLD_ZIP" != "$NEW_ZIP" ]; then
+            mv "$OLD_ZIP" "$NEW_ZIP" || true
+          fi
+          echo "ZIP_PATH=dist/$NEW_ZIP" >> $GITHUB_OUTPUT
+        id: rename_zip
+
+      - name: Generate release notes
+        if: steps.check_release.outputs.SKIP == 'false'
+        id: release_notes
+        shell: bash
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LATEST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s" --reverse)
+          else
+            COMMITS=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s" --reverse)
+          fi
+
+          # Categorize commits
+          FEATURES=$(echo "$COMMITS" | grep -E "^- (feat|feature)" || true)
+          FIXES=$(echo "$COMMITS" | grep -E "^- (fix|bugfix)" || true)
+          OTHERS=$(echo "$COMMITS" | grep -vE "^- (feat|feature|fix|bugfix|ci|docs|chore)" || true)
+
+          # Write release notes to file incrementally
+          echo "## What's Changed (v${{ steps.version.outputs.VERSION }})" > release_notes.txt
+          echo "" >> release_notes.txt
+          echo "**Version bump**: ${{ steps.version.outputs.BUMP_TYPE }}" >> release_notes.txt
+          echo "" >> release_notes.txt
+
+          if [ -n "$FEATURES" ]; then
+            echo "### ✨ Features" >> release_notes.txt
+            echo "$FEATURES" >> release_notes.txt
+            echo "" >> release_notes.txt
+          fi
+
+          if [ -n "$FIXES" ]; then
+            echo "### 🐛 Bug Fixes" >> release_notes.txt
+            echo "$FIXES" >> release_notes.txt
+            echo "" >> release_notes.txt
+          fi
+
+          if [ -n "$OTHERS" ]; then
+            echo "### 📝 Other Changes" >> release_notes.txt
+            echo "$OTHERS" >> release_notes.txt
+            echo "" >> release_notes.txt
+          fi
+
+          echo "## Installation" >> release_notes.txt
+          echo "" >> release_notes.txt
+          echo "Download and run the update script:" >> release_notes.txt
+          echo "" >> release_notes.txt
+          echo "\`\`\`powershell" >> release_notes.txt
+          echo ".\update.ps1" >> release_notes.txt
+          echo "\`\`\`" >> release_notes.txt
+          echo "" >> release_notes.txt
+          echo "Or manually:" >> release_notes.txt
+          echo "1. Stop StationService" >> release_notes.txt
+          echo "2. Extract ZIP to \`C:\StationService\`" >> release_notes.txt
+          echo "3. Start StationService" >> release_notes.txt
+
+          echo "NOTES_FILE=release_notes.txt" >> $GITHUB_OUTPUT
 
       - name: Create Release
+        if: steps.check_release.outputs.SKIP == 'false'
         uses: softprops/action-gh-release@v1
         with:
-          files: ${{ steps.get_zip.outputs.ZIP_PATH }}
-          generate_release_notes: true
-          body: |
-            ## Installation
-
-            Download and run the update script:
-
-            ```powershell
-            # Download update.ps1 from repository
-            .\update.ps1
-            ```
-
-            Or manually:
-            1. Stop StationService
-            2. Extract ZIP to `C:\StationService`
-            3. Start StationService
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: Release ${{ steps.version.outputs.TAG }}
+          body_path: ${{ steps.release_notes.outputs.NOTES_FILE }}
+          files: ${{ steps.rename_zip.outputs.ZIP_PATH }}
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
