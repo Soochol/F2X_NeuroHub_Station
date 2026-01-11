@@ -18,6 +18,7 @@ Usage:
 
 import asyncio
 import logging
+import multiprocessing
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -453,6 +454,11 @@ app = create_application()
 
 def main():
     """Main entry point for running the service."""
+    # CRITICAL: Support for multiprocessing in PyInstaller frozen executables
+    # This MUST be called at the start of main() to prevent child processes
+    # from re-executing the entire application code and causing port conflicts
+    multiprocessing.freeze_support()
+
     import uvicorn
     from station_service.tray import TrayIcon, set_tray_icon
 
