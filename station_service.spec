@@ -118,6 +118,7 @@ a = Analysis(
         'station_service.api.routes.system',
         'station_service.api.websocket',
         'station_service.batch',
+        'station_service.batch.worker_main',  # Batch worker entry point
         'station_service.core',
         'station_service.drivers',
         'station_service.hardware',
