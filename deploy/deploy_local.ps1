@@ -81,15 +81,39 @@ if (-not $service) {
     exit 1
 }
 
-# Stop service
-Write-Step "Stopping service..."
+# Stop service and all related processes
+Write-Step "Stopping service and all related processes..."
+
+# Stop Windows Service first
 if ($service.Status -eq "Running") {
     Stop-Service -Name $ServiceName -Force
-    Start-Sleep -Seconds 3
+    Start-Sleep -Seconds 2
     Write-Success "Service stopped"
 } else {
     Write-Info "Service was not running"
 }
+
+# Force kill any remaining StationService processes (parent and child workers)
+$processes = Get-Process -Name "StationService" -ErrorAction SilentlyContinue
+if ($processes) {
+    Write-Info "Cleaning up remaining processes: $($processes.Id -join ', ')"
+    $processes | Stop-Process -Force
+    Start-Sleep -Seconds 2
+    Write-Success "All processes terminated"
+}
+
+# Verify critical ports are free
+$port5555 = netstat -ano | Select-String ":5555.*LISTENING"
+$port8080 = netstat -ano | Select-String ":8080.*LISTENING"
+if ($port5555 -or $port8080) {
+    Write-Fail "Critical ports still in use after cleanup!"
+    if ($port5555) { Write-Info "Port 5555 (IPC): $port5555" }
+    if ($port8080) { Write-Info "Port 8080 (HTTP): $port8080" }
+    Write-Info "Please manually kill the processes or reboot"
+    pause
+    exit 1
+}
+Write-Success "All ports verified free"
 
 # Backup config and data
 Write-Step "Backing up config and data..."

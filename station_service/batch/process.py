@@ -117,9 +117,12 @@ class BatchProcess:
         except Exception as e:
             logger.warning(f"Failed to get token info for worker: {e}")
 
+        # Import worker_main - separate entry point to avoid main.py re-execution
+        from station_service.batch.worker_main import worker_main
+
         # Create process
         self._process = multiprocessing.Process(
-            target=self._run_worker,
+            target=worker_main,
             args=(
                 self._batch_id,
                 self._config.model_dump(),
@@ -208,107 +211,3 @@ class BatchProcess:
             except Exception:
                 pass
         self._process = None
-
-    @staticmethod
-    def _run_worker(
-        batch_id: str,
-        config_dict: Dict[str, Any],
-        ipc_router_address: str,
-        ipc_sub_address: str,
-        backend_config_dict: Optional[Dict[str, Any]] = None,
-        workflow_config_dict: Optional[Dict[str, Any]] = None,
-        token_info_dict: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """
-        Entry point for the worker subprocess.
-
-        This method runs in a separate process.
-
-        Args:
-            batch_id: The batch ID
-            config_dict: Serialized batch configuration
-            ipc_router_address: IPC router address
-            ipc_sub_address: IPC sub address
-            backend_config_dict: Serialized backend configuration for API integration
-            workflow_config_dict: Serialized workflow configuration for 착공/완공
-            token_info_dict: Serialized operator token info for JWT authentication
-        """
-        # Import here to avoid circular imports and ensure
-        # we're importing in the subprocess context
-        import asyncio
-        import sys
-        import logging
-
-        # Fix for Windows ZMQ compatibility
-        # ProactorEventLoop (Windows default) doesn't support add_reader/add_writer
-        # which ZMQ asyncio requires
-        if sys.platform == "win32":
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-        # Configure logging for subprocess
-        logging.basicConfig(
-            level=logging.INFO,
-            format=f"[{batch_id}] %(levelname)s: %(message)s",
-        )
-
-        logger = logging.getLogger(__name__)
-        logger.info(f"Worker process starting for batch {batch_id}")
-
-        try:
-            # Import worker class
-            from station_service.batch.worker import BatchWorker
-            from station_service.models.config import BatchConfig, BackendConfig, WorkflowConfig
-
-            # Reconstruct configs from dicts
-            logger.debug(f"[_run_worker] Reconstructing config for batch {batch_id}")
-            logger.debug(f"[_run_worker] config_dict keys: {list(config_dict.keys())}")
-            logger.debug(f"[_run_worker] backend_config_dict keys: {list(backend_config_dict.keys()) if backend_config_dict else 'None'}")
-            
-            try:
-                config = BatchConfig(**config_dict)
-                logger.debug(f"[_run_worker] BatchConfig reconstructed successfully")
-            except Exception as e:
-                logger.error(f"[_run_worker] Failed to reconstruct BatchConfig: {e}", exc_info=True)
-                raise
-
-            backend_config = None
-            if backend_config_dict:
-                try:
-                    backend_config = BackendConfig(**backend_config_dict)
-                    logger.debug(f"[_run_worker] BackendConfig reconstructed successfully")
-                except Exception as e:
-                    logger.error(f"[_run_worker] Failed to reconstruct BackendConfig: {e}", exc_info=True)
-                    raise
-            
-            workflow_config = None
-            if workflow_config_dict:
-                try:
-                    workflow_config = WorkflowConfig(**workflow_config_dict)
-                    logger.debug(f"[_run_worker] WorkflowConfig reconstructed successfully")
-                except Exception as e:
-                    logger.error(f"[_run_worker] Failed to reconstruct WorkflowConfig: {e}", exc_info=True)
-                    raise
-            if backend_config:
-                logger.info(f"Backend integration enabled: {backend_config.url}")
-            else:
-                logger.info("Backend integration disabled (no config)")
-
-            # Create and run worker
-            worker = BatchWorker(
-                batch_id=batch_id,
-                config=config,
-                ipc_router_address=ipc_router_address,
-                ipc_sub_address=ipc_sub_address,
-                backend_config=backend_config,
-                workflow_config=workflow_config,
-                token_info_dict=token_info_dict,
-            )
-
-            # Run the async main loop
-            asyncio.run(worker.run())
-
-        except Exception as e:
-            logger.exception(f"Worker process error: {e}")
-            sys.exit(1)
-
-        logger.info(f"Worker process exiting for batch {batch_id}")
