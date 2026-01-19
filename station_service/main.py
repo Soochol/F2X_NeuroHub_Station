@@ -6,7 +6,7 @@ It handles startup/shutdown lifecycle, initializes all components, and
 serves the REST API along with WebSocket connections.
 
 Usage:
-    # Run directly
+    # Run directly (server mode)
     python -m station_service.main
 
     # Run with uvicorn
@@ -14,6 +14,9 @@ Usage:
 
     # Run with custom config
     STATION_CONFIG=/path/to/station.yaml python -m station_service.main
+
+    # Run sequence only (runner mode) - used by CLI worker subprocess
+    python -m station_service.main --run-sequence <sequence_name> --config <json>
 """
 
 import asyncio
@@ -69,19 +72,9 @@ _container: Optional[ServiceContainer] = None
 _backend_client: Optional[BackendClient] = None
 
 
-def get_application_root() -> Path:
-    """
-    Get the application root directory.
-
-    For PyInstaller frozen executables, this returns the directory containing the EXE.
-    For normal Python execution, this returns the project root (parent of station_service/).
-    """
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller bundle - EXE is in the root folder
-        return Path(sys.executable).parent
-    else:
-        # Running as normal Python script
-        return Path(__file__).parent.parent
+# Re-export get_application_root from utils.paths for backward compatibility
+# but prefer importing directly from station_service.utils.paths
+from station_service.utils.paths import get_application_root
 
 
 def load_config(config_path: Optional[str] = None) -> StationConfig:
@@ -448,8 +441,172 @@ def create_application() -> FastAPI:
     return app
 
 
-# Create application instance
-app = create_application()
+# CRITICAL: Only create app instance when this module is the main entry point
+# or when explicitly requested. This prevents subprocess workers from
+# re-initializing the entire application and causing port conflicts.
+#
+# For uvicorn with module string "station_service.main:app", app must exist
+# at module level, but we use lazy initialization to avoid issues.
+_app: Optional[FastAPI] = None
+
+
+def get_app() -> FastAPI:
+    """Get or create the FastAPI application instance (lazy initialization)."""
+    global _app
+    if _app is None:
+        _app = create_application()
+    return _app
+
+
+# For backward compatibility and uvicorn module string support
+# This property-like access ensures app is only created when actually accessed
+def __getattr__(name: str):
+    """Module-level __getattr__ for lazy app initialization."""
+    if name == "app":
+        return get_app()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def run_sequence_mode(sequence_name: str, config_json: str) -> int:
+    """
+    Run a sequence in isolated runner mode.
+
+    This mode is used by CLI worker subprocess to execute sequences without
+    starting the full server (uvicorn, IPC server, tray icon, etc.).
+
+    Args:
+        sequence_name: Name of the sequence package to run
+        config_json: JSON string containing execution configuration
+
+    Returns:
+        Exit code: 0=PASS, 1=FAIL, 2=ERROR
+    """
+    import json
+
+    logger.info(f"[Runner Mode] Starting sequence: {sequence_name}")
+
+    try:
+        # Parse config
+        config = json.loads(config_json)
+
+        # Add application root to sys.path so sequences can be imported
+        # This is necessary because subprocess doesn't inherit PYTHONPATH properly
+        # in all environments (especially PyInstaller frozen builds)
+        app_root = get_application_root()
+        app_root_str = str(app_root)
+        if app_root_str not in sys.path:
+            sys.path.insert(0, app_root_str)
+            logger.debug(f"[Runner Mode] Added to sys.path: {app_root_str}")
+
+        # Dynamically import and run the sequence
+        # The sequence package should have a main module with a SequenceBase subclass
+        module_name = f"sequences.{sequence_name}.main"
+
+        try:
+            import importlib
+            module = importlib.import_module(module_name)
+        except ImportError as e:
+            logger.error(f"[Runner Mode] Failed to import sequence module: {e}")
+            # Output error in JSON Lines format for CLI worker to parse
+            print(json.dumps({
+                "type": "error",
+                "data": {
+                    "code": "IMPORT_ERROR",
+                    "message": f"Failed to import sequence '{sequence_name}': {e}",
+                }
+            }), flush=True)
+            return 2
+
+        # Find the SequenceBase subclass in the module
+        from station_service_sdk import SequenceBase
+
+        sequence_class = None
+        for name in dir(module):
+            obj = getattr(module, name)
+            if (
+                isinstance(obj, type)
+                and issubclass(obj, SequenceBase)
+                and obj is not SequenceBase
+            ):
+                sequence_class = obj
+                break
+
+        if sequence_class is None:
+            logger.error(f"[Runner Mode] No SequenceBase subclass found in {module_name}")
+            print(json.dumps({
+                "type": "error",
+                "data": {
+                    "code": "NO_SEQUENCE_CLASS",
+                    "message": f"No SequenceBase subclass found in '{module_name}'",
+                }
+            }), flush=True)
+            return 2
+
+        # Run the sequence using its CLI entry point
+        # This reuses the existing SDK infrastructure
+        logger.info(f"[Runner Mode] Found sequence class: {sequence_class.__name__}")
+
+        # Inject the config into sys.argv for the sequence's parse_args
+        sys.argv = [
+            sequence_name,
+            "--start",
+            "--config",
+            config_json,
+        ]
+
+        # Run the sequence
+        exit_code = sequence_class.run_from_cli()
+        logger.info(f"[Runner Mode] Sequence completed with exit code: {exit_code}")
+        return exit_code
+
+    except json.JSONDecodeError as e:
+        logger.error(f"[Runner Mode] Invalid config JSON: {e}")
+        print(json.dumps({
+            "type": "error",
+            "data": {
+                "code": "INVALID_CONFIG",
+                "message": f"Invalid config JSON: {e}",
+            }
+        }), flush=True)
+        return 2
+
+    except Exception as e:
+        logger.exception(f"[Runner Mode] Unexpected error: {e}")
+        print(json.dumps({
+            "type": "error",
+            "data": {
+                "code": "RUNNER_ERROR",
+                "message": str(e),
+            }
+        }), flush=True)
+        return 2
+
+
+def parse_runner_args() -> tuple[bool, Optional[str], Optional[str]]:
+    """
+    Parse command line arguments for runner mode.
+
+    Returns:
+        Tuple of (is_runner_mode, sequence_name, config_json)
+    """
+    import argparse
+
+    # Check if --run-sequence is in argv before full parsing
+    # This avoids conflicts with other argument parsers
+    if "--run-sequence" not in sys.argv:
+        return (False, None, None)
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--run-sequence", type=str, help="Sequence name to run")
+    parser.add_argument("--config", type=str, help="Execution config as JSON")
+
+    # Parse known args only to avoid conflicts
+    args, _ = parser.parse_known_args()
+
+    if args.run_sequence:
+        return (True, args.run_sequence, args.config or "{}")
+
+    return (False, None, None)
 
 
 def main():
@@ -459,6 +616,15 @@ def main():
     # from re-executing the entire application code and causing port conflicts
     multiprocessing.freeze_support()
 
+    # Check for runner mode FIRST, before any server initialization
+    is_runner_mode, sequence_name, config_json = parse_runner_args()
+
+    if is_runner_mode:
+        # Runner mode: execute sequence only, no server/IPC/tray
+        exit_code = run_sequence_mode(sequence_name, config_json)
+        sys.exit(exit_code)
+
+    # Server mode: full service with uvicorn, IPC, tray, etc.
     import uvicorn
     from station_service.tray import TrayIcon, set_tray_icon
 
@@ -497,11 +663,14 @@ def main():
 
     logger.info(f"Starting server on {host}:{port}")
 
+    # Create app instance explicitly for main execution
+    application = get_app()
+
     try:
         # Use app object directly instead of module string for PyInstaller compatibility
         # Module string "station_service.main:app" doesn't work in frozen executables
         uvicorn.run(
-            app,
+            application,
             host=host,
             port=port,
             log_level="info",

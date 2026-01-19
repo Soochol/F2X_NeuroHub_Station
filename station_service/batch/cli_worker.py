@@ -4,6 +4,12 @@ CLI-based sequence worker using subprocess.
 Runs SDK-based sequences via subprocess and parses JSON Lines output
 for real-time event forwarding to IPC.
 
+The worker uses the built-in runner mode of station_service to execute
+sequences in isolation, avoiding port conflicts with the main server.
+
+Command format:
+    <executable> --run-sequence <sequence_name> --config <json>
+
 Usage:
     worker = CLISequenceWorker(
         batch_id="batch_1",
@@ -31,8 +37,9 @@ class CLISequenceWorker:
     """
     Runs sequence via subprocess and parses JSON Lines output.
 
-    Replaces internal executor with subprocess execution:
-    - Spawns sequence as: python -m sequences.{name}.main --start --config '...'
+    Uses the built-in runner mode to execute sequences in isolation:
+    - Spawns sequence as: <exe> --run-sequence <name> --config '...'
+    - This avoids starting uvicorn/IPC server in subprocess (port conflict fix)
     - Parses JSON Lines output for real-time events
     - Forwards events to IPC for WebSocket broadcast
     """
@@ -139,17 +146,18 @@ class CLISequenceWorker:
         if "/" in package_name:
             package_name = package_name.split("/")[-1]
 
+        # Use built-in runner mode to avoid port conflicts in PyInstaller builds
+        # This runs only the sequence without starting uvicorn/IPC server
         cmd = [
             self._python,
-            "-m",
-            f"sequences.{package_name}.main",
-            "--start",
+            "--run-sequence",
+            package_name,
             "--config",
             config_json,
         ]
 
         logger.info(f"Starting CLI sequence: {self._sequence_name} (exec_id={self._execution_id})")
-        logger.debug(f"Command: {cmd[0]} -m {cmd[2]} --start --config '...'")
+        logger.debug(f"Command: {cmd[0]} --run-sequence {package_name} --config '...'")
 
         # Start subprocess
         try:
@@ -157,15 +165,30 @@ class CLISequenceWorker:
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
 
+            # Add sequences directory parent to PYTHONPATH for subprocess
+            # This ensures the subprocess can import sequences.{name}.main
+            sequences_parent = str(self._sequences_dir.parent.resolve())
+            existing_pythonpath = env.get("PYTHONPATH", "")
+            if existing_pythonpath:
+                env["PYTHONPATH"] = f"{sequences_parent}{os.pathsep}{existing_pythonpath}"
+            else:
+                env["PYTHONPATH"] = sequences_parent
+
+            logger.debug(f"Subprocess PYTHONPATH: {env['PYTHONPATH']}")
+
             # Windows-compatible subprocess creation using Popen
             # (asyncio.create_subprocess_exec requires ProactorEventLoop,
             # but ZMQ requires SelectorEventLoop on Windows)
+            # Use .resolve() to convert to absolute path for frozen environments
+            cwd_path = str(self._sequences_dir.parent.resolve())
+            logger.debug(f"Subprocess cwd: {cwd_path}")
+
             self._process = subprocess.Popen(
                 cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                cwd=str(self._sequences_dir.parent),
+                cwd=cwd_path,
                 env=env,
                 bufsize=1,  # Line buffered
             )
@@ -275,7 +298,7 @@ class CLISequenceWorker:
 
         logger.info(f"CLI sequence completed: return_code={return_code}")
 
-        # Handle abnormal termination (no sequence_complete event received)
+        # Case 1: Abnormal termination (non-zero exit code, no sequence_complete event)
         if return_code != 0 and self._final_result is None:
             logger.error(f"Sequence subprocess failed with return code {return_code}")
             self._final_result = {
@@ -294,6 +317,37 @@ class CLISequenceWorker:
                     self._execution_id,
                     False,  # overall_pass
                     0,      # duration
+                    self._final_result,
+                )
+
+        # Case 2: Normal exit but sequence_complete event not received
+        # (possible stdout buffering issue on Windows)
+        elif return_code == 0 and self._final_result is None:
+            logger.warning(
+                "Sequence exited successfully but sequence_complete event not received. "
+                "Using collected step results."
+            )
+            # Determine overall_pass from collected step results
+            all_passed = all(
+                step.get("passed", False)
+                for step in self._step_results
+                if step.get("status") in ("completed", "failed")
+            )
+            self._final_result = {
+                "overall_pass": all_passed,
+                "duration": 0,  # Exact duration not available
+                "steps": self._step_results,
+                "measurements": self._measurements,
+                "warning": "sequence_complete event not received",
+                "execution_id": self._execution_id,
+            }
+
+            if self._on_sequence_complete:
+                await self._safe_callback(
+                    self._on_sequence_complete,
+                    self._execution_id,
+                    all_passed,
+                    0,
                     self._final_result,
                 )
 
