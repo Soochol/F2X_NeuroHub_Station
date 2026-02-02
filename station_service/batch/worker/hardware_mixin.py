@@ -338,7 +338,9 @@ class HardwareMixin:
 
         # Install dependencies from pyproject.toml if exists
         pyproject_path = package_dir / "pyproject.toml"
+        logger.info(f"Checking pyproject.toml at: {pyproject_path}")
         if pyproject_path.exists():
+            logger.info(f"Found pyproject.toml, checking dependencies...")
             try:
                 from station_service.utils.dependency_installer import (
                     install_sequence_dependencies,
@@ -350,11 +352,15 @@ class HardwareMixin:
                 with open(pyproject_path, "rb") as f:
                     pyproject_data = tomllib.load(f)
                 deps = pyproject_data.get("project", {}).get("dependencies", [])
+                logger.info(f"Sequence dependencies: {deps}")
 
                 # Install missing dependencies
+                logger.info(f"Attempting to install missing dependencies...")
                 installed = install_sequence_dependencies(package_dir)
                 if installed:
                     logger.info(f"Installed dependencies: {installed}")
+                else:
+                    logger.info(f"No dependencies were installed (already present or install failed)")
 
                 # Verify all dependencies are now installed
                 if deps:

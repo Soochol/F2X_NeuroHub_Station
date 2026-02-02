@@ -72,7 +72,28 @@ class CLISequenceWorker:
         self._batch_id = batch_id
         self._sequence_name = sequence_name
         self._sequences_dir = sequences_dir
-        self._python = python_executable or sys.executable
+
+        # In frozen (PyInstaller) environment, use embedded/system Python for sequence execution
+        # This allows sequences to use pip-installed packages like loguru
+        # When using external Python, we run sequences as modules (python -m sequences.name.main)
+        # When using EXE, we use --run-sequence flag (StationService.exe --run-sequence name)
+        self._use_module_mode = False  # True when using external Python (embedded or system)
+        if python_executable:
+            self._python = python_executable
+            self._use_module_mode = True
+        elif getattr(sys, 'frozen', False):
+            from station_service.utils.dependency_installer import get_system_python
+            # get_system_python() now prioritizes embedded Python, falls back to system Python
+            external_python = get_system_python()
+            if external_python:
+                logger.info(f"[CLIWorker] Using external Python for sequence execution: {external_python}")
+                self._python = external_python
+                self._use_module_mode = True  # External Python requires module execution
+            else:
+                logger.warning("[CLIWorker] No Python found (embedded or system), falling back to EXE (sequences may fail)")
+                self._python = sys.executable
+        else:
+            self._python = sys.executable
 
         # Callbacks
         self._on_step_start = on_step_start
@@ -100,6 +121,59 @@ class CLISequenceWorker:
     def running(self) -> bool:
         """Check if sequence is running."""
         return self._running
+
+    async def _install_dependencies(self) -> None:
+        """Install sequence dependencies before execution."""
+        # Extract package name from potential path
+        package_name = self._sequence_name
+        if "/" in package_name:
+            package_name = package_name.split("/")[-1]
+
+        package_dir = self._sequences_dir / package_name
+        pyproject_path = package_dir / "pyproject.toml"
+
+        logger.info(f"[DependencyCheck] sequences_dir={self._sequences_dir}, package={package_name}")
+        logger.info(f"[DependencyCheck] Looking for pyproject.toml at: {pyproject_path}")
+        logger.info(f"[DependencyCheck] pyproject.toml exists: {pyproject_path.exists()}")
+
+        if not pyproject_path.exists():
+            logger.warning(f"No pyproject.toml found at {pyproject_path} - skipping dependency install")
+            return
+
+        logger.info(f"Checking dependencies for sequence: {package_name}")
+
+        try:
+            from station_service.utils.dependency_installer import (
+                install_sequence_dependencies,
+                get_missing_packages,
+            )
+            import tomllib
+
+            # Read dependencies
+            with open(pyproject_path, "rb") as f:
+                pyproject_data = tomllib.load(f)
+            deps = pyproject_data.get("project", {}).get("dependencies", [])
+
+            if not deps:
+                logger.debug("No dependencies in pyproject.toml")
+                return
+
+            logger.info(f"Sequence dependencies: {deps}")
+
+            # Install missing dependencies
+            installed = install_sequence_dependencies(package_dir)
+            if installed:
+                logger.info(f"Installed dependencies: {installed}")
+
+            # Verify installation
+            still_missing = get_missing_packages(deps)
+            if still_missing:
+                logger.warning(f"Some dependencies still missing after install: {still_missing}")
+            else:
+                logger.info("All sequence dependencies verified")
+
+        except Exception as e:
+            logger.error(f"Failed to install dependencies: {e}")
 
     @property
     def execution_id(self) -> Optional[str]:
@@ -138,6 +212,9 @@ class CLISequenceWorker:
         self._measurements = {}
         self._final_result = None
 
+        # Install sequence dependencies before starting
+        await self._install_dependencies()
+
         # Build command
         config_json = json.dumps(config, ensure_ascii=False)
 
@@ -146,18 +223,42 @@ class CLISequenceWorker:
         if "/" in package_name:
             package_name = package_name.split("/")[-1]
 
-        # Use built-in runner mode to avoid port conflicts in PyInstaller builds
-        # This runs only the sequence without starting uvicorn/IPC server
-        cmd = [
-            self._python,
-            "--run-sequence",
-            package_name,
-            "--config",
-            config_json,
-        ]
+        # Build command based on execution mode:
+        # - Module mode (external Python): python -c "sys.path setup; runpy.run_module(...)"
+        # - Runner mode (EXE): StationService.exe --run-sequence <name> --config <json>
+        if self._use_module_mode:
+            # External Python: use runpy to run as module with explicit path setup
+            # This handles relative imports correctly
+            app_root = str(self._sequences_dir.parent.resolve())
+            # Escape backslashes for Windows paths in the Python code string
+            app_root_escaped = app_root.replace("\\", "\\\\")
+            config_json_escaped = config_json.replace("\\", "\\\\").replace("'", "\\'")
 
-        logger.info(f"Starting CLI sequence: {self._sequence_name} (exec_id={self._execution_id})")
-        logger.debug(f"Command: {cmd[0]} --run-sequence {package_name} --config '...'")
+            bootstrap_code = (
+                f"import sys; "
+                f"sys.path.insert(0, r'{app_root_escaped}'); "
+                f"sys.argv = ['', '--start', '--config', r'''{config_json_escaped}''']; "
+                f"import runpy; "
+                f"runpy.run_module('sequences.{package_name}.main', run_name='__main__')"
+            )
+            cmd = [
+                self._python,
+                "-c",
+                bootstrap_code,
+            ]
+            logger.info(f"Starting CLI sequence (module mode): {self._sequence_name} (exec_id={self._execution_id})")
+            logger.debug(f"Command: {cmd[0]} -c 'sys.argv=[--start,--config,...]; runpy.run_module(sequences.{package_name}.main)'")
+        else:
+            # EXE or normal Python: use --run-sequence flag
+            cmd = [
+                self._python,
+                "--run-sequence",
+                package_name,
+                "--config",
+                config_json,
+            ]
+            logger.info(f"Starting CLI sequence (runner mode): {self._sequence_name} (exec_id={self._execution_id})")
+            logger.debug(f"Command: {cmd[0]} --run-sequence {package_name} --config '...'")
 
         # Start subprocess
         try:

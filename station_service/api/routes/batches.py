@@ -664,6 +664,7 @@ async def manual_control(
     responses={
         status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse},
         status.HTTP_409_CONFLICT: {"model": ErrorResponse},
+        status.HTTP_424_FAILED_DEPENDENCY: {"model": ErrorResponse},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse},
     },
     summary="Create a new batch",
@@ -677,6 +678,7 @@ async def manual_control(
 async def create_batch(
     request: BatchCreateRequest,
     config_service: BatchConfigService = Depends(get_batch_config_service),
+    config: StationConfig = Depends(get_config),
 ) -> ApiResponse[BatchCreateResponse]:
     """
     Create a new batch configuration with YAML persistence.
@@ -701,6 +703,58 @@ async def create_batch(
 
         # Create via service (persists to YAML + memory)
         await config_service.create_batch(batch_config)
+
+        # Install sequence dependencies (BLOCKING - fail batch creation if dependencies fail)
+        from station_service.utils.dependency_installer import (
+            install_sequence_dependencies,
+            get_missing_packages,
+        )
+        from pathlib import Path
+        import sys
+
+        # Use sequences_dir from config (handles frozen/portable environments)
+        sequences_dir = Path(config.paths.sequences_dir)
+        if not sequences_dir.is_absolute():
+            # Relative path - resolve from executable location
+            if getattr(sys, 'frozen', False):
+                base_dir = Path(sys.executable).parent
+            else:
+                base_dir = Path.cwd()
+            sequences_dir = base_dir / sequences_dir
+
+        package_dir = sequences_dir / request.sequence_package
+        logger.info(f"Checking sequence package at: {package_dir}")
+
+        if package_dir.exists():
+            logger.info(f"Installing dependencies for sequence: {request.sequence_package}")
+            installed = install_sequence_dependencies(package_dir)
+            if installed:
+                logger.info(f"Installed dependencies: {installed}")
+            else:
+                logger.info(f"No new dependencies installed (already present or none required)")
+
+            # Verify all dependencies are installed
+            pyproject_path = package_dir / "pyproject.toml"
+            if pyproject_path.exists():
+                try:
+                    import tomllib
+                except ImportError:
+                    import tomli as tomllib
+                with open(pyproject_path, "rb") as f:
+                    data = tomllib.load(f)
+                deps = data.get("project", {}).get("dependencies", [])
+                if deps:
+                    still_missing = get_missing_packages(deps)
+                    if still_missing:
+                        # Rollback: delete the batch we just created
+                        logger.error(f"Dependency installation failed. Missing: {still_missing}")
+                        await config_service.delete_batch(request.id)
+                        raise HTTPException(
+                            status_code=status.HTTP_424_FAILED_DEPENDENCY,
+                            detail=f"Missing dependencies: {still_missing}. Install Python 3.11+ on this system.",
+                        )
+        else:
+            logger.warning(f"Sequence package not found at: {package_dir}")
 
         # Broadcast batch created event via WebSocket
         await broadcast_batch_created(

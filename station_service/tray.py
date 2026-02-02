@@ -142,7 +142,7 @@ class TrayIcon:
 
     def _on_open_logs(self, icon: "pystray.Icon", item: "pystray.MenuItem") -> None:
         """Open the logs folder."""
-        from station_service.main import get_application_root
+        from station_service.utils.paths import get_application_root
         logs_dir = get_application_root() / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         if sys.platform == "win32":
@@ -151,7 +151,7 @@ class TrayIcon:
 
     def _on_open_config(self, icon: "pystray.Icon", item: "pystray.MenuItem") -> None:
         """Open the config file."""
-        from station_service.main import get_application_root
+        from station_service.utils.paths import get_application_root
         config_file = get_application_root() / "config" / "station.yaml"
         if config_file.exists() and sys.platform == "win32":
             import os

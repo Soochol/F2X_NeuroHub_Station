@@ -129,6 +129,7 @@ a = Analysis(
         'station_service.storage',
         'station_service.sync',
         'station_service.utils',
+        'station_service.utils.paths',  # Path utilities (must not import main.py)
         'station_service.tray',
 
         # System tray support

@@ -118,10 +118,14 @@ class ExecutionMixin:
             if result:
                 logger.info(
                     f"CLI sequence completed: overall_pass={result.get('overall_pass')}, "
-                    f"duration={result.get('duration'):.2f}s"
+                    f"duration={result.get('duration', 0):.2f}s"
                 )
             else:
-                logger.warning("CLI sequence completed without result")
+                logger.error("CLI sequence completed without result - forcing failure state")
+                await self._ipc.error(
+                    code="SEQUENCE_NO_RESULT",
+                    message="시퀀스 완료 이벤트를 수신하지 못했습니다",
+                )
 
         except asyncio.CancelledError:
             logger.info("CLI sequence execution cancelled")

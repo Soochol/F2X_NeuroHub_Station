@@ -254,9 +254,16 @@ class CommandsMixin:
         )
 
         # Create CLI worker for subprocess execution
+        # Use absolute path to ensure it works in both dev and frozen (PyInstaller) environments
+        # IMPORTANT: Import from utils.paths, NOT from main.py to avoid re-initializing the app
+        from station_service.utils.paths import get_application_root
+
+        app_root = get_application_root()
+        sequences_dir = app_root / "sequences"
+
         self._cli_worker = self.create_cli_worker(
             sequence_name=self._state.sequence_name or self._config.sequence_package,
-            sequences_dir=Path("sequences"),
+            sequences_dir=sequences_dir,
         )
 
         # Build config for CLI execution

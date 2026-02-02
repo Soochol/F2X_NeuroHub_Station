@@ -54,7 +54,7 @@ echo.
 :: ============================================
 :: Step 1: Clean previous builds
 :: ============================================
-echo [1/6] Cleaning previous builds...
+echo [1/7] Cleaning previous builds...
 
 :: Kill running StationService processes
 tasklist /FI "IMAGENAME eq StationService.exe" 2>NUL | find /I /N "StationService.exe">NUL
@@ -79,7 +79,7 @@ echo   Done.
 :: Step 2: Setup Python environment
 :: ============================================
 echo.
-echo [2/6] Setting up Python environment...
+echo [2/7] Setting up Python environment...
 
 :: Check if venv exists
 if not exist ".venv\Scripts\activate.bat" (
@@ -127,7 +127,7 @@ echo   Done.
 :: Step 3: Build React UI
 :: ============================================
 echo.
-echo [3/6] Building React UI...
+echo [3/7] Building React UI...
 cd "%PROJECT_ROOT%\station_ui"
 
 :: Check Node.js
@@ -173,7 +173,7 @@ cd "%PROJECT_ROOT%"
 :: Step 4: Build EXE with PyInstaller
 :: ============================================
 echo.
-echo [4/6] Building EXE with PyInstaller...
+echo [4/7] Building EXE with PyInstaller...
 echo   This may take several minutes...
 
 pyinstaller station_service.spec --clean --noconfirm
@@ -197,7 +197,7 @@ echo   Done. EXE built to dist\StationService\
 :: Step 5: Package deployment folder
 :: ============================================
 echo.
-echo [5/6] Creating deployment package...
+echo [5/7] Creating deployment package...
 
 :: Create output directory
 echo   Creating deployment structure...
@@ -248,6 +248,7 @@ echo.
 echo Directory Structure:
 echo   StationService.exe     - Main executable
 echo   _internal\             - Bundled dependencies ^(do not modify^)
+echo   python\                - Embedded Python for sequence execution
 echo   config\                - Configuration files
 echo   sequences\             - Test sequences ^(external, updatable^)
 echo   data\                  - Runtime data ^(SQLite DB^)
@@ -266,10 +267,92 @@ echo Support: https://github.com/Soochol/F2X_NeuroHub_Station
 echo   Done.
 
 :: ============================================
-:: Step 6: Generate checksums and compress
+:: Step 6: Setup Embedded Python
 :: ============================================
 echo.
-echo [6/6] Finalizing deployment package...
+echo [6/7] Setting up Embedded Python for sequence execution...
+
+set "PYTHON_VERSION=3.11.9"
+set "PYTHON_ZIP=python-%PYTHON_VERSION%-embed-amd64.zip"
+set "PYTHON_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/%PYTHON_ZIP%"
+set "EMBEDDED_PYTHON_DIR=%OUTPUT_DIR%\python"
+
+:: Download Python embeddable package
+echo   Downloading Python %PYTHON_VERSION% embeddable package...
+if not exist "%PROJECT_ROOT%\%PYTHON_ZIP%" (
+    powershell -Command "Invoke-WebRequest -Uri '%PYTHON_URL%' -OutFile '%PROJECT_ROOT%\%PYTHON_ZIP%'"
+    if errorlevel 1 (
+        echo ERROR: Failed to download Python embeddable package
+        echo URL: %PYTHON_URL%
+        pause
+        exit /b 1
+    )
+) else (
+    echo   Using cached %PYTHON_ZIP%
+)
+
+:: Extract to python/ folder
+echo   Extracting Python to %EMBEDDED_PYTHON_DIR%...
+mkdir "%EMBEDDED_PYTHON_DIR%" 2>nul
+powershell -Command "Expand-Archive -Path '%PROJECT_ROOT%\%PYTHON_ZIP%' -DestinationPath '%EMBEDDED_PYTHON_DIR%' -Force"
+if errorlevel 1 (
+    echo ERROR: Failed to extract Python embeddable package
+    pause
+    exit /b 1
+)
+
+:: Enable pip and add app root to Python path
+echo   Configuring Python paths...
+set "PTH_FILE=%EMBEDDED_PYTHON_DIR%\python311._pth"
+if exist "%PTH_FILE%" (
+    :: Rewrite the _pth file to include app root (parent of python folder)
+    :: This allows: python -m sequences.xxx.main to find the sequences folder
+    (
+        echo python311.zip
+        echo .
+        echo ..
+        echo Lib\site-packages
+        echo import site
+    ) > "%PTH_FILE%"
+    echo   Updated python311._pth with app root path
+)
+
+:: Download and run get-pip.py
+echo   Installing pip...
+set "GET_PIP_URL=https://bootstrap.pypa.io/get-pip.py"
+set "GET_PIP_FILE=%EMBEDDED_PYTHON_DIR%\get-pip.py"
+powershell -Command "Invoke-WebRequest -Uri '%GET_PIP_URL%' -OutFile '%GET_PIP_FILE%'"
+if errorlevel 1 (
+    echo ERROR: Failed to download get-pip.py
+    pause
+    exit /b 1
+)
+
+"%EMBEDDED_PYTHON_DIR%\python.exe" "%GET_PIP_FILE%" --no-warn-script-location
+if errorlevel 1 (
+    echo ERROR: Failed to install pip
+    pause
+    exit /b 1
+)
+
+:: Install SDK as base dependency for all sequences
+echo   Installing station-service-sdk...
+"%EMBEDDED_PYTHON_DIR%\python.exe" -m pip install station-service-sdk --no-warn-script-location --quiet
+if errorlevel 1 (
+    echo WARNING: Failed to install station-service-sdk
+    echo Sequences may need to install it on first run
+)
+
+:: Clean up get-pip.py
+del "%GET_PIP_FILE%" 2>nul
+
+echo   Done. Embedded Python ready at python\
+
+:: ============================================
+:: Step 7: Generate checksums and compress
+:: ============================================
+echo.
+echo [7/7] Finalizing deployment package...
 
 :: Generate SHA256 checksum
 echo   Generating SHA256 checksums...
