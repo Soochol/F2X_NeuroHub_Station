@@ -111,6 +111,7 @@ except ImportError:
 # Mapping from pip package name to import name
 PACKAGE_IMPORT_MAP = {
     "pyserial": "serial",
+    "pyserial-asyncio": "serial_asyncio",
     "pyyaml": "yaml",
     "pillow": "PIL",
     "scikit-learn": "sklearn",
