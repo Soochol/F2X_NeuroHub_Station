@@ -107,34 +107,69 @@ class SerialBarcodeScannerDriver(BaseDriver):
         try:
             import serial_asyncio
         except ImportError:
-            import asyncio
+            import subprocess
             import sys
+            import os
 
             self._logger.info("pyserial-asyncio not found, installing...")
             try:
-                proc = await asyncio.create_subprocess_exec(
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "pyserial-asyncio",
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                _, stderr = await proc.communicate()
-                if proc.returncode != 0:
+                # PyInstaller 환경에서 안정적인 실행을 위해 subprocess.run 사용
+                # asyncio.create_subprocess_exec는 Windows embedded Python에서 문제 발생
+                loop = asyncio.get_running_loop()
+                cmd_list = [sys.executable, "-m", "pip", "install", "pyserial-asyncio"]
+
+                def run_pip_install():
+                    if os.name == 'nt':
+                        # Windows: CREATE_NO_WINDOW로 콘솔 창 방지
+                        # encoding='utf-8' + errors='replace'로 cp949 디코딩 에러 방지
+                        CREATE_NO_WINDOW = 0x08000000
+                        return subprocess.run(
+                            cmd_list,
+                            capture_output=True,
+                            text=True,
+                            timeout=120,
+                            shell=False,
+                            creationflags=CREATE_NO_WINDOW,
+                            encoding='utf-8',
+                            errors='replace',
+                        )
+                    else:
+                        return subprocess.run(
+                            cmd_list,
+                            capture_output=True,
+                            text=True,
+                            timeout=120,
+                        )
+
+                result = await loop.run_in_executor(None, run_pip_install)
+
+                # stdout/stderr가 None일 수 있으므로 안전하게 처리
+                stderr = result.stderr or ""
+                if result.returncode != 0:
                     raise DriverConnectionError(
-                        f"Failed to install pyserial-asyncio: {stderr.decode()}",
+                        f"Failed to install pyserial-asyncio: {stderr}",
                         driver_name=self.name,
                     )
                 import serial_asyncio
             except DriverConnectionError:
                 raise
+            except subprocess.TimeoutExpired:
+                raise DriverConnectionError(
+                    "pip install pyserial-asyncio timed out",
+                    driver_name=self.name,
+                )
+            except OSError as e:
+                # Windows에서 DLL 로드 실패 등의 상세 에러 캡처
+                raise DriverConnectionError(
+                    f"pip install failed - OSError: {e} (winerror={getattr(e, 'winerror', 'N/A')})",
+                    driver_name=self.name,
+                    details={"error": str(e), "winerror": getattr(e, 'winerror', None)},
+                )
             except Exception as e:
                 raise DriverConnectionError(
                     "pyserial-asyncio not installed and auto-install failed",
                     driver_name=self.name,
-                    details={"error": str(e)},
+                    details={"error": str(e), "error_type": type(e).__name__},
                 )
 
         try:
