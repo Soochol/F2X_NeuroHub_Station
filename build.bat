@@ -56,13 +56,13 @@ echo.
 :: ============================================
 echo [1/7] Cleaning previous builds...
 
-:: Kill running StationService processes
-tasklist /FI "IMAGENAME eq StationService.exe" 2>NUL | find /I /N "StationService.exe">NUL
+:: Kill running StationService processes (ignore errors if not running or access denied)
+taskkill /F /IM StationService.exe >nul 2>&1
 if "%ERRORLEVEL%"=="0" (
-    echo   Stopping running StationService processes...
-    powershell -Command "Get-Process -Name StationService -ErrorAction SilentlyContinue | Stop-Process -Force"
+    echo   Stopped running StationService processes.
     timeout /t 2 /nobreak >nul
-    echo   Processes stopped.
+) else (
+    echo   No StationService process running ^(or already stopped^).
 )
 
 if exist "%BUILD_DIR%" (
