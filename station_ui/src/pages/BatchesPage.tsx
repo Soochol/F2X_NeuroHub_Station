@@ -4,7 +4,7 @@
  * Detail view is now a separate page (/batches/:batchId).
  */
 
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layers, Plus, WifiOff } from 'lucide-react';
 import {
@@ -13,8 +13,13 @@ import {
   useSequenceList,
   useCreateBatches,
   useAllBatchStatistics,
+  useStartBatch,
+  useStartSequence,
+  useStopBatch,
+  useWorkflowConfig,
 } from '../hooks';
 import { useBatchStore } from '../stores/batchStore';
+import { useLogStore } from '../stores/logStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import { BatchList } from '../components/organisms/batches/BatchList';
 import { CreateBatchWizard } from '../components/organisms/batches/CreateBatchWizard';
@@ -22,8 +27,12 @@ import { BatchStatisticsPanel } from '../components/organisms/batches/BatchStati
 import { Button } from '../components/atoms/Button';
 import { LoadingOverlay } from '../components/atoms/LoadingSpinner';
 import { getBatchDetailRoute } from '../constants';
-import type { CreateBatchRequest, SequencePackage } from '../types';
+import type { CreateBatchRequest, SequencePackage, BatchDetail } from '../types';
 import { getSequence } from '../api/endpoints/sequences';
+import { getBatch as fetchBatchFromApi } from '../api/endpoints/batches';
+import { validateWip } from '../api/endpoints/system';
+import { WipInputModal } from '../components/molecules';
+import { toast } from '../utils/toast';
 
 export function BatchesPage() {
   const navigate = useNavigate();
@@ -62,6 +71,17 @@ export function BatchesPage() {
   }, [batchesMap, batchesVersion]);
 
   const createBatches = useCreateBatches();
+  const startBatch = useStartBatch();
+  const startSequence = useStartSequence();
+  const stopBatch = useStopBatch();
+
+  // Workflow configuration for WIP modal
+  const { data: workflowConfig } = useWorkflowConfig();
+
+  // WIP input modal state
+  const [showWipModal, setShowWipModal] = useState(false);
+  const [wipError, setWipError] = useState<string | null>(null);
+  const [selectedBatchIdForWip, setSelectedBatchIdForWip] = useState<string | null>(null);
 
   // Subscribe to all batches for real-time updates
   // NOTE: We intentionally don't unsubscribe on cleanup because:
@@ -81,6 +101,123 @@ export function BatchesPage() {
 
   const handleSelectBatch = (id: string) => {
     navigate(getBatchDetailRoute(id));
+  };
+
+  const handleStartSequence = async (batchId: string) => {
+    // If workflow is enabled, show WIP input modal first
+    if (workflowConfig?.enabled) {
+      setSelectedBatchIdForWip(batchId);
+      setShowWipModal(true);
+      return;
+    }
+
+    // Otherwise, start sequence directly
+    await doStartSequence(batchId);
+  };
+
+  // Actually start the sequence (with optional WIP ID)
+  const doStartSequence = async (batchId: string, wipId?: string, wipIntId?: number) => {
+    // Clear logs before starting new sequence
+    useLogStore.getState().clearLogs();
+
+    // Track if we started the batch so we can stop it on error
+    let batchWasStarted = false;
+
+    try {
+      // Fetch fresh batch status from API
+      const freshBatch = await fetchBatchFromApi(batchId);
+      const currentStatus = freshBatch.status;
+
+      // If batch is idle, start batch first then start sequence
+      if (currentStatus === 'idle') {
+        await startBatch.mutateAsync(batchId);
+        batchWasStarted = true;
+      }
+
+      // Prepare request with WIP ID if provided
+      const request = wipId ? {
+        parameters: { wip_id: wipId },
+        wip_int_id: wipIntId,
+      } : undefined;
+
+      // Then start sequence
+      await startSequence.mutateAsync({ batchId, request });
+    } catch (error) {
+      console.error('Failed to start sequence:', error);
+
+      // If we started the batch but sequence failed, stop the batch
+      if (batchWasStarted) {
+        try {
+          await stopBatch.mutateAsync(batchId);
+        } catch (stopError) {
+          console.error('Failed to stop batch:', stopError);
+        }
+      }
+
+      throw error;
+    }
+  };
+
+  // Handle WIP input modal submit
+  const handleWipSubmit = async (wipId: string) => {
+    if (!selectedBatchIdForWip) return;
+    setWipError(null);
+
+    try {
+      // Get batch detail to find processId
+      const batchDetail = await fetchBatchFromApi(selectedBatchIdForWip) as BatchDetail;
+      const processId = batchDetail.processId ?? (batchDetail.config?.processId as number | undefined);
+
+      if (processId === undefined || processId === null) {
+        setWipError('MES Process가 설정되지 않았습니다. Batch 상세 페이지에서 Config 탭에서 MES Process를 설정해주세요.');
+        return;
+      }
+
+      // Validate WIP
+      const validationResult = await validateWip(wipId, processId);
+
+      if (!validationResult.valid) {
+        setWipError(validationResult.message || `WIP '${wipId}' not found`);
+        return;
+      }
+
+      // Check if WIP already PASS for this process
+      if (validationResult.hasPassForProcess) {
+        setWipError(validationResult.passWarningMessage || '이 WIP는 이미 해당 공정을 PASS했습니다.');
+        return;
+      }
+
+      // WIP is valid - close modal and start sequence
+      setShowWipModal(false);
+      setSelectedBatchIdForWip(null);
+
+      await doStartSequence(selectedBatchIdForWip, wipId, validationResult.intId);
+    } catch (error) {
+      const errorMessage = error instanceof Error
+        ? error.message
+        : (error as { message?: string })?.message || 'Failed to validate WIP';
+
+      if (showWipModal) {
+        setWipError(errorMessage);
+      } else {
+        toast.error(errorMessage);
+      }
+    }
+  };
+
+  // Handle closing the WIP modal
+  const handleWipModalClose = () => {
+    setShowWipModal(false);
+    setWipError(null);
+    setSelectedBatchIdForWip(null);
+  };
+
+  const handleStopSequence = async (batchId: string) => {
+    try {
+      await stopBatch.mutateAsync(batchId);
+    } catch (error) {
+      console.error('Failed to stop sequence:', error);
+    }
   };
 
   const handleCreateBatches = async (request: CreateBatchRequest) => {
@@ -133,6 +270,9 @@ export function BatchesPage() {
         batches={displayBatches}
         statistics={batchStatistics}
         onSelect={handleSelectBatch}
+        onStartSequence={handleStartSequence}
+        onStopSequence={handleStopSequence}
+        isStartingSequence={startBatch.isPending || startSequence.isPending}
       />
 
       {/* Create Batch Wizard Modal */}
@@ -143,6 +283,16 @@ export function BatchesPage() {
         sequences={sequences ?? []}
         getSequenceDetail={getSequenceDetail}
         isSubmitting={createBatches.isPending}
+      />
+
+      {/* WIP Input Modal */}
+      <WipInputModal
+        isOpen={showWipModal}
+        onClose={handleWipModalClose}
+        onSubmit={handleWipSubmit}
+        isLoading={startBatch.isPending || startSequence.isPending}
+        batchName={selectedBatchIdForWip ? batchesMap.get(selectedBatchIdForWip)?.name : undefined}
+        errorMessage={wipError}
       />
     </div>
   );

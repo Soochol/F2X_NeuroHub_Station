@@ -12,23 +12,25 @@ import type { Batch, BatchStatistics } from '../../types';
 export interface BatchCardProps {
   batch: Batch;
   statistics?: BatchStatistics;
-  onStart?: (batchId: string) => void;
-  onStop?: (batchId: string) => void;
   onDelete?: (batchId: string) => void;
   onSelect?: (batchId: string) => void;
+  onStartSequence?: (batchId: string) => void;
+  onStopSequence?: (batchId: string) => void;
   isLoading?: boolean;
   isSelected?: boolean;
+  isStartingSequence?: boolean;
 }
 
 export function BatchCard({
   batch,
   statistics,
-  onStart,
-  onStop,
   onDelete,
   onSelect,
+  onStartSequence,
+  onStopSequence,
   isLoading,
   isSelected,
+  isStartingSequence,
 }: BatchCardProps) {
   const isRunning = batch.status === 'running' || batch.status === 'starting';
   const canStart = batch.status === 'idle' || batch.status === 'completed' || batch.status === 'error';
@@ -65,26 +67,28 @@ export function BatchCard({
           <StatusBadge status={batch.status} size="sm" />
         </div>
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {canStart && onStart && (
+          {canStart && onStartSequence && (
             <Button
-              variant="ghost"
+              variant="primary"
               size="sm"
-              onClick={() => onStart(batch.id)}
-              disabled={isLoading}
-              title="Start"
+              onClick={() => onStartSequence(batch.id)}
+              disabled={isLoading || isStartingSequence}
+              title="Start Sequence"
             >
-              <Play className="w-4 h-4" />
+              <Play className="w-4 h-4 mr-1" />
+              Start
             </Button>
           )}
-          {isRunning && onStop && (
+          {isRunning && onStopSequence && (
             <Button
-              variant="ghost"
+              variant="danger"
               size="sm"
-              onClick={() => onStop(batch.id)}
+              onClick={() => onStopSequence(batch.id)}
               disabled={isLoading}
-              title="Stop"
+              title="Stop Sequence"
             >
-              <Square className="w-4 h-4" />
+              <Square className="w-4 h-4 mr-1" />
+              Stop
             </Button>
           )}
           {!isRunning && onDelete && (

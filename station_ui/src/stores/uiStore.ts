@@ -7,17 +7,20 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 type Theme = 'dark' | 'light';
+export type BatchListLayout = 'vertical' | 'horizontal' | 'grid';
 
 interface UIState {
   // State
   theme: Theme;
   sidebarCollapsed: boolean;
+  batchListLayout: BatchListLayout;
 
   // Actions
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
+  setBatchListLayout: (layout: BatchListLayout) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -26,6 +29,7 @@ export const useUIStore = create<UIState>()(
       // Initial state
       theme: 'dark',
       sidebarCollapsed: false,
+      batchListLayout: 'vertical',
 
       // Actions
       setTheme: (theme) => {
@@ -53,10 +57,12 @@ export const useUIStore = create<UIState>()(
 
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+
+      setBatchListLayout: (layout) => set({ batchListLayout: layout }),
     }),
     {
       name: 'station-ui-settings',
-      partialize: (state) => ({ theme: state.theme }),
+      partialize: (state) => ({ theme: state.theme, batchListLayout: state.batchListLayout }),
       onRehydrateStorage: () => (state) => {
         // Apply theme on rehydration
         if (state?.theme === 'dark') {
